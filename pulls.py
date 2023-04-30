@@ -5,7 +5,7 @@ import functools
 import random
 from asyncio import Task
 from io import BytesIO
-from typing import Dict, List, Any, Optional
+from typing import Dict, List, Any, Optional, Union
 import datetime as dt
 
 import discord
@@ -206,7 +206,7 @@ class PullsCog(commands.Cog, name="Pulls"):
 
             channel = self.bot.get_channel(config.channel_id)
 
-            comics: Dict[int, Comic | ComicMessage] = self.comics[config.brand].copy()
+            comics: Dict[int, Union[Comic, ComicMessage]] = self.comics[config.brand].copy()
 
             if config.check_keywords:
                 kw = await fetch_keywords(self.bot.db, config.server_id)
@@ -243,7 +243,7 @@ class PullsCog(commands.Cog, name="Pulls"):
             else:
                 await channel.send(f"There are no {config.brand.value} comics this week.")
 
-    async def summary_embed(self, comics: Dict[int, Comic | ComicMessage], brand: Brand, start: discord.Message = None):
+    async def summary_embed(self, comics: Dict[int, Union[Comic, ComicMessage]], brand: Brand, start: discord.Message = None):
         empty_embed = discord.Embed(color=brand_colours[brand])
 
         embeds = []
