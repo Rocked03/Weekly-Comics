@@ -1,0 +1,12 @@
+TOKEN = "TOKEN HERE"
+BOT_PREFIX = 'PREFIX HERE'
+
+marvelKey_public = "PUBLIC KEY HERE"
+marvelKey_private = "PRIVATE KEY HERE"
+
+postgres_credentials = {
+    "user": "USER",
+    "password": "PASS",
+    "database": "DB",
+    "host": "IP"
+}
