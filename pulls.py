@@ -13,9 +13,9 @@ from discord import *
 from discord.app_commands import *
 from discord.app_commands.tree import _log
 from discord.ext import commands
-from marvel.marvel import Marvel
+from marvel.marvel import Marvel  # pip install -U git+https://github.com/Rocked03/PyMarvel#egg=PyMarvel
 
-from funcs.profile import load_image, Profile, imager, imager_to_bytes
+from funcs.profile import load_image, Profile, imager_to_bytes
 from objects.comic import Comic, ComicMessage
 from config import marvelKey_public, marvelKey_private
 from objects.configuration import Configuration, Format, Brand, brand_colours, config_from_record, format_autocomplete, \
