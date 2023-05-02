@@ -298,7 +298,7 @@ class PullsCog(commands.Cog, name="Pulls"):
     @app_commands.command(name="debug")
     @app_commands.check(is_owner)
     async def debug(self, interaction: discord.Interaction):
-        """Debug command, ignore."""
+        """Debug command, dev-only."""
         await interaction.response.defer()
 
         if not self.comics:
@@ -317,7 +317,7 @@ class PullsCog(commands.Cog, name="Pulls"):
     @app_commands.command(name="debug-profile")
     @app_commands.check(is_owner)
     async def debug_profile(self, interaction: discord.Interaction):
-        """Debug command, ignore."""
+        """Debug command, dev-only."""
         await interaction.response.defer()
 
         if not self.comics:
