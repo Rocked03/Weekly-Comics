@@ -26,6 +26,11 @@ brand_links = {
     Brand.DC: "DC.com"
 }
 
+brand_default_days = {
+    Brand.MARVEL: 1,
+    Brand.DC: 3
+}
+
 
 class Format(Enum):
     FULL = "Full"

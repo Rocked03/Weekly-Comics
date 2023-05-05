@@ -19,7 +19,7 @@ from funcs.profile import load_image, Profile, imager_to_bytes
 from objects.comic import Comic, ComicMessage
 from config import marvelKey_public, marvelKey_private
 from objects.configuration import Configuration, Format, Brand, brand_colours, config_from_record, format_autocomplete, \
-    brand_autocomplete, weekdays, next_scheduled, brand_links
+    brand_autocomplete, weekdays, next_scheduled, brand_links, brand_default_days
 from crawlers.dc_crawler import dc_crawl
 from crawlers.marvel_crawler import marvel_crawl
 from objects.keywords import fetch_keywords, sanitise, add_keyword, Types, delete_keyword
@@ -406,7 +406,7 @@ class PullsCog(commands.Cog, name="Pulls"):
         new_config = Configuration(
             interaction.guild_id,
             channel.id,
-            brand=b, format=f
+            brand=b, format=f, day=brand_default_days[b]
         )
 
         await new_config.upload_to_sql(self.bot.db)
