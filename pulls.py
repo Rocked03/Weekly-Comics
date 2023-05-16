@@ -64,8 +64,6 @@ class PullsCog(commands.Cog, name="Pulls"):
         self.access_lock = asyncio.Lock()
         self.locks: Dict[int, asyncio.Lock] = {}
 
-        self.bot.loop.create_task(self.schedule_crawl())
-
         self.feed_schedules: Dict[(int, Brand), Task] = {}
         self.bot.loop.create_task(self.on_startup_scheduler())
 
