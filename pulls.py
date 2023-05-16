@@ -88,6 +88,8 @@ class PullsCog(commands.Cog, name="Pulls"):
 
     async def schedule_crawl(self):
         while not self.bot.is_closed():
+            await self.fetch_comics()
+
             now = dt.datetime.utcnow().date()
             time = dt.datetime.combine(now, dt.time(0), tzinfo=dt.timezone.utc)
             time -= dt.timedelta(minutes=30)
@@ -95,8 +97,6 @@ class PullsCog(commands.Cog, name="Pulls"):
             if sleep_duration.total_seconds() <= 0:
                 sleep_duration += dt.timedelta(days=1)
             await asyncio.sleep(sleep_duration.total_seconds())
-
-            await self.fetch_comics()
 
     async def schedule_pfp(self):
         while not self.comics:
@@ -243,7 +243,8 @@ class PullsCog(commands.Cog, name="Pulls"):
             else:
                 await channel.send(f"There are no {config.brand.value} comics this week.")
 
-    async def summary_embed(self, comics: Dict[int, Union[Comic, ComicMessage]], brand: Brand, start: discord.Message = None):
+    async def summary_embed(self, comics: Dict[int, Union[Comic, ComicMessage]], brand: Brand,
+                            start: discord.Message = None):
         empty_embed = discord.Embed(color=brand_colours[brand])
 
         embeds = []
@@ -325,7 +326,6 @@ class PullsCog(commands.Cog, name="Pulls"):
 
         img = await self.profile_pic()
         await interaction.followup.send(file=discord.File(fp=img, filename="my_file.png"))
-
 
     async def fetch_raw_configs(self, server: int):
         return await self.bot.db.fetch(
