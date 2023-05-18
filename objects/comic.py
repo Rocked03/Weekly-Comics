@@ -14,10 +14,6 @@ def alpha_surnames(names):
 class Comic:
     def __init__(self, brand: Brand = None, id=None, title=None, description=None, creators=None, image_url=None,
                  url=None, page_count=None, price=None, copyright=None, date=None, **kwargs):
-        if price is None:
-            price = {}
-        if url is None:
-            url = {}
         if creators is None:
             creators = {}
 

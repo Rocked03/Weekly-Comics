@@ -356,7 +356,7 @@ class PullsCog(commands.Cog, name="Pulls"):
         await interaction.response.defer()
         b = Brand(brand)
 
-        if not self.comics:
+        if b not in self.comics.keys():
             return await interaction.followup.send(
                 "Comics are not yet fetched. Please wait a few moments and try again.")
 
