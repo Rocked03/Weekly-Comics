@@ -86,6 +86,7 @@ class PullsCog(commands.Cog, name="Pulls"):
 
     async def schedule_crawl(self):
         while not self.bot.is_closed():
+            print(f"Starting scheduled crawl.")
             await self.fetch_comics()
 
             now = dt.datetime.utcnow().date()
@@ -94,7 +95,9 @@ class PullsCog(commands.Cog, name="Pulls"):
             sleep_duration = time - discord.utils.utcnow()
             if sleep_duration.total_seconds() <= 0:
                 sleep_duration += dt.timedelta(days=1)
+            print(f"Next crawl in {sleep_duration.total_seconds()}s (in {sleep_duration})")
             await asyncio.sleep(sleep_duration.total_seconds())
+            print(f"Next crawl initiating:")
 
     async def schedule_pfp(self):
         while not self.comics:
