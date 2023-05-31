@@ -93,7 +93,7 @@ class PullsCog(commands.Cog, name="Pulls"):
             time = dt.datetime.combine(now, dt.time(0), tzinfo=dt.timezone.utc)
             time -= dt.timedelta(minutes=30)
             sleep_duration = time - discord.utils.utcnow()
-            if sleep_duration.total_seconds() <= 0:
+            while sleep_duration.total_seconds() <= 0:
                 sleep_duration += dt.timedelta(days=1)
             print(f"Next crawl in {sleep_duration.total_seconds()}s (in {sleep_duration})")
             await asyncio.sleep(sleep_duration.total_seconds())
