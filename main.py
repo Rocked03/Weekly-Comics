@@ -23,7 +23,8 @@ description = "Weekly Comics"
 bot = Zelma(
     command_prefix=lambda bot, message: BOT_PREFIX,
     description=description,
-    intents=intents)
+    intents=intents,
+    max_messages=None)
 
 bot.recentcog = None
 
