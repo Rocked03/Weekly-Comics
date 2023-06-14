@@ -355,7 +355,7 @@ class PullsCog(commands.Cog, name="Pulls"):
             interaction.guild_id, b.name
         )
 
-        if config and config[0].check_keywords:
+        if config and config_from_record(config[0]).check_keywords:
             kw = await fetch_keywords(self.bot.db, config.server_id)
             comics = {k: v for k, v in comics.items() if kw.check_comic(v)}
 
