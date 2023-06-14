@@ -26,7 +26,7 @@ class Keywords:
         self.creators = creators
 
     def check_comic(self, comic: Comic):
-        header = sanitise(comic.title + " " + comic.description)
+        header = sanitise((comic.title if comic.title else "") + " " + (comic.description if comic.description else ""))
 
         if any(sanitise(i) in header for i in self.keys):
             return True
