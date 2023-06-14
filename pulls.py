@@ -350,14 +350,16 @@ class PullsCog(commands.Cog, name="Pulls"):
 
         comics = self.comics[b]
 
-        config = await self.bot.db.fetch(
+        con = await self.bot.db.fetch(
             'SELECT * FROM configuration WHERE server = $1 and brand = $2',
             interaction.guild_id, b.name
         )
 
-        if config and config_from_record(config[0]).check_keywords:
-            kw = await fetch_keywords(self.bot.db, config.server_id)
-            comics = {k: v for k, v in comics.items() if kw.check_comic(v)}
+        if con:
+            config = config_from_record(con[0])
+            if config.check_keywords:
+                kw = await fetch_keywords(self.bot.db, config.server_id)
+                comics = {k: v for k, v in comics.items() if kw.check_comic(v)}
 
         embeds = await self.summary_embed(comics, b)
         await interaction.followup.send(embeds=embeds)
