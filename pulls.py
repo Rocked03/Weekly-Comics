@@ -348,7 +348,18 @@ class PullsCog(commands.Cog, name="Pulls"):
         if b not in self.comics:
             return await interaction.followup.send("Comics are not yet fetched.")
 
-        embeds = await self.summary_embed(self.comics[b], b)
+        comics = self.comics[b]
+
+        config = await self.bot.db.fetch(
+            'SELECT * FROM configuration WHERE server = $1 and brand = $2',
+            interaction.guild_id, b.name
+        )
+
+        if config and config[0].check_keywords:
+            kw = await fetch_keywords(self.bot.db, config.server_id)
+            comics = {k: v for k, v in comics.items() if kw.check_comic(v)}
+
+        embeds = await self.summary_embed(comics, b)
         await interaction.followup.send(embeds=embeds)
 
     @app_commands.command(name="trigger-feed")
