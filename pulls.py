@@ -3,6 +3,7 @@ import copy
 import datetime
 import functools
 import random
+import traceback
 from asyncio import Task
 from io import BytesIO
 from typing import Dict, List, Any, Optional, Union
@@ -87,7 +88,10 @@ class PullsCog(commands.Cog, name="Pulls"):
     async def schedule_crawl(self):
         while not self.bot.is_closed():
             print(f"Starting scheduled crawl.")
-            await self.fetch_comics()
+            try:
+                await self.fetch_comics()
+            except Exception:
+                traceback.print_exc()
 
             now = dt.datetime.utcnow().date()
             time = dt.datetime.combine(now, dt.time(0), tzinfo=dt.timezone.utc)

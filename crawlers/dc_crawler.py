@@ -37,8 +37,10 @@ async def dc_from_soup():
 
         soup = BeautifulSoup(page, 'html.parser')
 
-        txt = soup.find_all(class_="sc-g8nqnn-0 dXApWk")
+        txt = soup.find_all(class_="sc-g8nqnn-0")
 
+        if not txt:
+            print(txt)
         c_type = ''.join(txt[0].find('p', class_='text-left').contents).strip()
         if c_type != "COMIC BOOK":
             continue
@@ -50,7 +52,7 @@ async def dc_from_soup():
                 desc_list = get_desc(txt[1])
                 desc = '\n'.join(i.strip() for i in ''.join(desc_list).split('\n') if i.strip())
 
-        details_list = [i.contents for i in soup.find_all('div', class_="sc-b3fnpg-3 eRdwCd")]
+        details_list = [i.contents for i in soup.find_all('div', class_="sc-b3fnpg-3")]
         details = {}
         for d in details_list:
             for dd in d:
