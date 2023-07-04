@@ -95,7 +95,7 @@ class PullsCog(commands.Cog, name="Pulls"):
 
             now = dt.datetime.utcnow().date()
             time = dt.datetime.combine(now, dt.time(0), tzinfo=dt.timezone.utc)
-            time += dt.timedelta(minutes=30)
+            time += dt.timedelta(minutes=45)
             sleep_duration = time - discord.utils.utcnow()
             while sleep_duration.total_seconds() <= 0:
                 sleep_duration += dt.timedelta(days=1)
