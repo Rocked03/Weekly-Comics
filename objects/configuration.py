@@ -119,7 +119,7 @@ def config_from_record(record: Record):
 def next_scheduled(day: int):
     now = dt.datetime.utcnow().date()
     soon = now + dt.timedelta(days=(day - now.weekday()) % 7)
-    time = dt.time(1)
+    time = dt.time(hour=1, minute=30)
     combined = dt.datetime.combine(soon, time, tzinfo=dt.timezone.utc)
     if combined < discord.utils.utcnow():
         combined += dt.timedelta(days=7)
