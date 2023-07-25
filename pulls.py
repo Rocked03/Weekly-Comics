@@ -180,6 +180,9 @@ class PullsCog(commands.Cog, name="Pulls"):
 
     async def fetch_comics(self):
         print(f"~~ Fetching comics ~~   {discord.utils.utcnow()}")
+        self.comics = {}
+        self.date = {}
+        self.order = {}
 
         print(" > Fetching Marvel")
         self.comics[Brand.MARVEL] = await marvel_crawl(Marvel(marvelKey_public, marvelKey_private))
