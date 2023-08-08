@@ -76,7 +76,7 @@ async def dc_from_soup():
         price = get_from_det('33')
         price = 0 if price == "FREE" else (float(price) if price else None)
         date = get_from_det('36')
-        date = datetime.strptime(date.replace('st', 'th').replace('nd,', 'th,').replace('rd', 'th'), '%A, %B %dth, %Y') if date else None
+        date = datetime.strptime(date.replace('st', 'th').replace('nd,', 'th,').replace('rd', 'th').replace('Auguth', 'August'), '%A, %B %dth, %Y') if date else None
         page_count = get_from_det('48')
 
         img = soup.find('img', id="page151-band11672-Card11673-img")
