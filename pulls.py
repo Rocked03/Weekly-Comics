@@ -186,26 +186,30 @@ class PullsCog(commands.Cog, name="Pulls"):
 
         print(" > Fetching Marvel")
         self.comics[Brand.MARVEL] = await marvel_crawl(Marvel(marvelKey_public, marvelKey_private))
+        self.filter_date(Brand.MARVEL, self.comics[Brand.MARVEL])
+        print(f" > Fetched Marvel for date {self.date[Brand.MARVEL]}")
 
         print(" > Fetching DC")
         self.comics[Brand.DC] = await dc_crawl()
-
-        for b, c in self.comics.items():
-            if c:
-                self.date[b] = dt.datetime(1, 1, 1)
-                for i in c.values():
-                    if i.date > self.date[b]:
-                        self.date[b] = i.date
-            else:
-                self.date[b] = None
-
-            self.order[b] = sorted([k for k, v in c.items() if (self.date[b] - v.date) <= datetime.timedelta(days=7)],
-                                   key=lambda x: c[x].title)
-
-            if c:
-                self.copyright[b] = c[self.order[b][0]].copyright
+        self.filter_date(Brand.DC, self.comics[Brand.DC])
+        print(f" > Fetched DC for date {self.date[Brand.DC]}")
 
         print(f"~~ Comics fetched ~~   {discord.utils.utcnow()}")
+
+    def filter_date(self, b, c):
+        if c:
+            self.date[b] = dt.datetime(1, 1, 1)
+            for i in c.values():
+                if i.date > self.date[b]:
+                    self.date[b] = i.date
+        else:
+            self.date[b] = None
+
+        self.order[b] = sorted([k for k, v in c.items() if (self.date[b] - v.date) <= datetime.timedelta(days=7)],
+                               key=lambda x: c[x].title)
+
+        if c:
+            self.copyright[b] = c[self.order[b][0]].copyright
 
     async def send_comics(self, config: Configuration):
         await self.check_lock(config.channel_id)
