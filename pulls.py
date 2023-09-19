@@ -188,20 +188,23 @@ class PullsCog(commands.Cog, name="Pulls"):
         self.comics[Brand.MARVEL] = await marvel_crawl(Marvel(marvelKey_public, marvelKey_private))
         self.filter_date(Brand.MARVEL, self.comics[Brand.MARVEL])
         print(f" > Fetched Marvel for date {self.date[Brand.MARVEL]}")
+        print(f"   > {len(self.comics[Brand.MARVEL])} loaded, filtered to {len(self.order[Brand.MARVEL])}")
 
         print(" > Fetching DC")
         self.comics[Brand.DC] = await dc_crawl()
         self.filter_date(Brand.DC, self.comics[Brand.DC])
         print(f" > Fetched DC for date {self.date[Brand.DC]}")
+        print(f"   > {len(self.comics[Brand.DC])} loaded, filtered to {len(self.order[Brand.DC])}")
 
         print(f"~~ Comics fetched ~~   {discord.utils.utcnow()}")
 
     def filter_date(self, b, c):
         if c:
-            self.date[b] = dt.datetime(1, 1, 1)
-            for i in c.values():
-                if i.date > self.date[b]:
-                    self.date[b] = i.date
+            # self.date[b] = dt.datetime(1, 1, 1)
+            # for i in c.values():
+            #     if i.date > self.date[b]:
+            #         self.date[b] = i.date
+            self.date[b] = max(i.date for i in c.values())
         else:
             self.date[b] = None
 
