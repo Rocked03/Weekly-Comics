@@ -8,13 +8,15 @@ from asyncio import Task
 from io import BytesIO
 from typing import Dict, List, Any, Optional, Union
 import datetime as dt
+from importlib import reload
 
 import discord
 from discord import *
 from discord.app_commands import *
 from discord.app_commands.tree import _log
 from discord.ext import commands
-from marvel.marvel import Marvel  # pip install -U git+https://github.com/Rocked03/PyMarvel#egg=PyMarvel
+# from marvel.marvel import Marvel  # pip install -U git+https://github.com/Rocked03/PyMarvel#egg=PyMarvel
+import marvel
 
 from funcs.profile import load_image, Profile, imager_to_bytes
 from objects.comic import Comic, ComicMessage
@@ -185,7 +187,8 @@ class PullsCog(commands.Cog, name="Pulls"):
         self.order = {}
 
         print(" > Fetching Marvel")
-        self.comics[Brand.MARVEL] = await marvel_crawl(Marvel(marvelKey_public, marvelKey_private))
+        reload(marvel)
+        self.comics[Brand.MARVEL] = await marvel_crawl(marvel.marvel.Marvel(marvelKey_public, marvelKey_private))
         self.filter_date(Brand.MARVEL, self.comics[Brand.MARVEL])
         print(f" > Fetched Marvel for date {self.date[Brand.MARVEL]}")
         print(f"   > {len(self.comics[Brand.MARVEL])} loaded, filtered to {len(self.order[Brand.MARVEL])}")

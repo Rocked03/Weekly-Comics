@@ -8,8 +8,7 @@ from objects.configuration import Brand
 
 
 async def marvel_from_API(marvel):
-    for i in range(2):  # seeing if running twice will update it with new info
-        raw = await marvel.get_comics(format='comic', noVariants='true', dateDescriptor='thisWeek', limit=100)
+    raw = await marvel.get_comics(format='comic', noVariants='true', dateDescriptor='thisWeek', limit=100)
 
     m_copyright = raw.dict['attributionText']
 
@@ -59,6 +58,7 @@ async def marvel_from_soup():
 async def marvel_crawl(marvel) -> Dict[int, Comic]:
     comics = await marvel_from_API(marvel)
     descs = await marvel_from_soup()
+    print(len(comics), len(descs))
 
     for k, c in comics.items():
         if k in descs:
