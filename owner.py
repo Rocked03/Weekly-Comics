@@ -166,7 +166,7 @@ class OwnerCog(commands.Cog, name="Owner"):
                 print("Couldn't close PostgreSQL connection")
 
     @app_commands.command()
-    @app_commands.guilds(ADMIN_GUILD_IDS or None)
+    @app_commands.guilds(*ADMIN_GUILD_IDS or None)
     @app_commands.check(is_owner)
     async def guilds(self, interaction: discord.Interaction):
         guilds = self.bot.guilds

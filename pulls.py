@@ -315,7 +315,7 @@ class PullsCog(commands.Cog, name="Pulls"):
         return img
 
     @app_commands.command(name="debug")
-    @app_commands.guilds(ADMIN_GUILD_IDS or None)
+    @app_commands.guilds(*ADMIN_GUILD_IDS or None)
     @app_commands.check(is_owner)
     async def debug(self, interaction: discord.Interaction):
         """Debug command, dev-only."""
@@ -335,7 +335,7 @@ class PullsCog(commands.Cog, name="Pulls"):
         await interaction.followup.send("Done.")
 
     @app_commands.command(name="debug-profile")
-    @app_commands.guilds(ADMIN_GUILD_IDS or None)
+    @app_commands.guilds(*ADMIN_GUILD_IDS or None)
     @app_commands.check(is_owner)
     async def debug_profile(self, interaction: discord.Interaction):
         """Debug command, dev-only."""
