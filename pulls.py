@@ -20,7 +20,7 @@ import marvel.marvel as marvel
 
 from funcs.profile import load_image, Profile, imager_to_bytes
 from objects.comic import Comic, ComicMessage
-from config import marvelKey_public, marvelKey_private
+from config import marvelKey_public, marvelKey_private, ADMIN_USER_IDS, ADMIN_GUILD_IDS
 from objects.configuration import Configuration, Format, Brand, brand_colours, config_from_record, format_autocomplete, \
     brand_autocomplete, weekdays, next_scheduled, brand_links, brand_default_days
 from crawlers.dc_crawler import dc_crawl
@@ -51,7 +51,7 @@ def f_date(date: dt.datetime):
 
 
 def is_owner(interaction: discord.Interaction) -> bool:
-    return interaction.user.id in [204778476102877187, 226595531844091904, 281991241812541440]
+    return interaction.user.id in ADMIN_USER_IDS
 
 
 class PullsCog(commands.Cog, name="Pulls"):
@@ -315,6 +315,7 @@ class PullsCog(commands.Cog, name="Pulls"):
         return img
 
     @app_commands.command(name="debug")
+    @app_commands.guilds(ADMIN_GUILD_IDS or None)
     @app_commands.check(is_owner)
     async def debug(self, interaction: discord.Interaction):
         """Debug command, dev-only."""
@@ -334,6 +335,7 @@ class PullsCog(commands.Cog, name="Pulls"):
         await interaction.followup.send("Done.")
 
     @app_commands.command(name="debug-profile")
+    @app_commands.guilds(ADMIN_GUILD_IDS or None)
     @app_commands.check(is_owner)
     async def debug_profile(self, interaction: discord.Interaction):
         """Debug command, dev-only."""

@@ -1,10 +1,16 @@
 import discord
+from discord import app_commands
 from discord.ext import commands
 from discord.ext.commands import *
 from typing import *
 
 import traceback
 
+from config import ADMIN_USER_IDS, ADMIN_GUILD_IDS
+
+
+def is_owner(interaction: discord.Interaction) -> bool:
+    return interaction.user.id in ADMIN_USER_IDS
 
 class OwnerCog(commands.Cog, name="Owner"):
     """Owner commands"""
@@ -158,6 +164,17 @@ class OwnerCog(commands.Cog, name="Owner"):
                 await self.bot.db.close()
             except Exception:
                 print("Couldn't close PostgreSQL connection")
+
+    @app_commands.command()
+    @app_commands.guilds(ADMIN_GUILD_IDS or None)
+    @app_commands.check(is_owner)
+    async def guilds(self, interaction: discord.Interaction):
+        guilds = self.bot.guilds
+
+        text = '\n'.join(f'{guild.name} `{guild.id}`' for guild in guilds)
+
+        await interaction.response.send_message(text)
+
 
 
 async def setup(bot):

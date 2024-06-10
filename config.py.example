@@ -10,3 +10,6 @@ postgres_credentials = {
     "database": "DB",
     "host": "IP"
 }
+
+ADMIN_GUILD_IDS = []
+ADMIN_USER_IDS = []
