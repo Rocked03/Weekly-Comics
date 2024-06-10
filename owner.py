@@ -169,11 +169,13 @@ class OwnerCog(commands.Cog, name="Owner"):
     @app_commands.guilds(*ADMIN_GUILD_IDS or None)
     @app_commands.check(is_owner)
     async def guilds(self, interaction: discord.Interaction):
-        guilds = self.bot.guilds
+        guilds = sorted(self.bot.guilds, key=lambda x: x.name)
 
-        text = '\n'.join(f'{guild.name} `{guild.id}`' for guild in guilds)
+        texts = [f'{guild.name} `{guild.id}`' for guild in guilds]
+        embed = discord.Embed(title=f"{len(self.bot.guilds)} total guilds")
+        embed.description = '\n'.join(texts)
 
-        await interaction.response.send_message(text)
+        await interaction.response.send_message(embed=embed)
 
 
 
