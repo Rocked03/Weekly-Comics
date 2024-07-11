@@ -50,8 +50,9 @@ class Comic:
 
     def format_creators(self, *, cover=False, compact=False):
         keys = sorted(sorted(self.creators.keys()), key=sorting_key)
+        bold_wrap = lambda role, name: f"**{name}**" if role else name
         return "\n".join(
-            f"**{k}**: {', '.join(alpha_surnames(self.creators[k]))}"
+            f"-#**{k}**\n{bold_wrap(', '.join(alpha_surnames(self.creators[k])))}"
             for k in keys
             if (not compact or k in ["Writer", "Penciler", "Artist"]) and (cover or not k.endswith("(Cover)"))
         )
@@ -66,7 +67,7 @@ class Comic:
             embed.add_field(name="Creators", value=self.format_creators())
         embed.add_field(name="Info",
                         value=f"{' · '.join(i for i in [self.price_format(), self.pages()] if i)}\n"
-                              f"More details on [{brand_links[self.brand]}]({self.url})")
+                              f"-# More details on [{brand_links[self.brand]}]({self.url})")
 
         embed.set_footer(text=f"{self.title} · {self.copyright}")
 

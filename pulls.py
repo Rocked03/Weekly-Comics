@@ -292,9 +292,12 @@ class PullsCog(commands.Cog, name="Pulls"):
             embeds[-1].set_footer(text=self.copyright[brand])
 
         embed = empty_embed.copy()
-        embed.set_footer(text=f"Data obtained by Rocked03#3304 from {brand_links[brand]}.")
+        embed.set_footer(text=f"Data obtained by Rocked03 from {brand_links[brand]}.")
+        description = []
         if start:
-            embed.description = f"*Jump to the [beginning]({start.jump_url}).*"
+            description.append(f"*Jump to the [beginning]({start.jump_url}).*")
+        description.append(f"-# Data obtained by Rocked03 from {brand_links[brand]}.")
+        embed.description = "\n".join(description)
         embeds.append(embed)
 
         return embeds
