@@ -58,12 +58,18 @@ class Comic:
         text = []
         overflow = []
         for n, k in enumerate(keys):
-            if n < 3:
+            if n < 2:
                 text.append(f"-# **{k}**\n{bold_wrap(k, ', '.join(alpha_surnames(self.creators[k])))}")
             else:
                 for name in self.creators[k]:
                     overflow.append(f"{name} ({k})")
-        text.append(f"-# **More**\n{', '.join(overflow)}")
+        if overflow:
+            if len(overflow) > 1:
+                text.append(f"-# **More**\n{', '.join(overflow)}")
+            else:
+                k = keys[-1]
+                text.append(f"-# **{k}**\n{bold_wrap(k, ', '.join(overflow))}")
+
         return "\n".join(text)
 
         # return "\n".join(
