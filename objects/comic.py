@@ -50,12 +50,27 @@ class Comic:
 
     def format_creators(self, *, cover=False, compact=False):
         keys = sorted(sorted(self.creators.keys()), key=sorting_key)
+        keys = [k for k in keys if cover or not k.endswith("(Cover)")]
         bold_wrap = lambda role, name: f"**{name}**" if role == "Writer" else name
-        return "\n".join(
-            f"-# **{k}**\n{bold_wrap(k, ', '.join(alpha_surnames(self.creators[k])))}"
-            for k in keys
-            if (not compact or k in ["Writer", "Penciler", "Artist"]) and (cover or not k.endswith("(Cover)"))
-        )
+        if compact:
+            keys = [k for k in keys if k in ["Writer", "Penciler", "Artist"]]
+
+        text = []
+        overflow = []
+        for n, k in enumerate(keys):
+            if n < 3:
+                text.append(f"-# **{k}**\n{bold_wrap(k, ', '.join(alpha_surnames(self.creators[k])))}")
+            else:
+                for name in self.creators[k]:
+                    overflow.append(f"{name} ({k})")
+        text.append(f"-# **More**\n{', '.join(overflow)}")
+        return "\n".join(text)
+
+        # return "\n".join(
+        #     f"-# **{k}**\n{bold_wrap(k, ', '.join(alpha_surnames(self.creators[k])))}"
+        #     for k in keys
+        #     if (not compact or k in ["Writer", "Penciler", "Artist"]) and (cover or not k.endswith("(Cover)"))
+        # )
 
     def to_embed(self, full_img=True):
         embed = discord.Embed(
