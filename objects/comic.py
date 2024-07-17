@@ -52,7 +52,7 @@ class Comic:
         keys = sorted(sorted(self.creators.keys()), key=sorting_key)
         bold_wrap = lambda role, name: f"**{name}**" if role else name
         return "\n".join(
-            f"-#**{k}**\n{bold_wrap(', '.join(alpha_surnames(self.creators[k])))}"
+            f"-#**{k}**\n{bold_wrap(k, ', '.join(alpha_surnames(self.creators[k])))}"
             for k in keys
             if (not compact or k in ["Writer", "Penciler", "Artist"]) and (cover or not k.endswith("(Cover)"))
         )
