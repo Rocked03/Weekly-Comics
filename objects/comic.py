@@ -50,7 +50,7 @@ class Comic:
 
     def format_creators(self, *, cover=False, compact=False):
         keys = sorted(sorted(self.creators.keys()), key=sorting_key)
-        bold_wrap = lambda role, name: f"**{name}**" if role else name
+        bold_wrap = lambda role, name: f"**{name}**" if role == "Writer" else name
         return "\n".join(
             f"-# **{k}**\n{bold_wrap(k, ', '.join(alpha_surnames(self.creators[k])))}"
             for k in keys
