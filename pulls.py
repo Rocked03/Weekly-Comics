@@ -230,36 +230,39 @@ class PullsCog(commands.Cog, name="Pulls"):
                 kw = await fetch_keywords(self.bot.db, config.server_id)
                 comics = {k: v for k, v in comics.items() if kw.check_comic(v)}
 
-            if comics:
-                lead_msg = None
-                if format in [Format.FULL, Format.COMPACT]:
-                    lead_msg = await channel.send(f"## {config.brand.value} Comics - {f_date(self.date[config.brand])}")
-                    if config.pin:
-                        await self.pin(lead_msg)
+            try:
+                if comics:
+                    lead_msg = None
+                    if format in [Format.FULL, Format.COMPACT]:
+                        lead_msg = await channel.send(f"## {config.brand.value} Comics - {f_date(self.date[config.brand])}")
+                        if config.pin:
+                            await self.pin(lead_msg)
 
-                if config.ping:
-                    await channel.send(f"<@&{config.ping}>")
+                    if config.ping:
+                        await channel.send(f"<@&{config.ping}>")
 
-                if format in [Format.FULL, Format.COMPACT]:
-                    embeds = {k: c.to_embed(format == Format.FULL) for k, c in comics.items()}
+                    if format in [Format.FULL, Format.COMPACT]:
+                        embeds = {k: c.to_embed(format == Format.FULL) for k, c in comics.items()}
 
-                    instances = {}
+                        instances = {}
 
-                    for cid in self.order[config.brand]:
-                        if cid in comics:
-                            msg = await channel.send(embed=embeds[cid])
-                            instances[cid] = comics[cid].to_instance(msg)
+                        for cid in self.order[config.brand]:
+                            if cid in comics:
+                                msg = await channel.send(embed=embeds[cid])
+                                instances[cid] = comics[cid].to_instance(msg)
 
-                    comics = instances
+                        comics = instances
 
-                summary_embeds = await self.summary_embed(comics, config.brand, lead_msg)
+                    summary_embeds = await self.summary_embed(comics, config.brand, lead_msg)
 
-                summ_msg = await channel.send(embeds=summary_embeds)
-                if config.pin and format == Format.SUMMARY:
-                    await self.pin(summ_msg)
+                    summ_msg = await channel.send(embeds=summary_embeds)
+                    if config.pin and format == Format.SUMMARY:
+                        await self.pin(summ_msg)
 
-            else:
-                await channel.send(f"There are no {config.brand.value} comics this week.")
+                else:
+                    await channel.send(f"There are no {config.brand.value} comics this week.")
+            except Forbidden:
+                print(f"Missing permissions in {channel.guild.name} ({channel.guild.id})")
 
     async def summary_embed(self, comics: Dict[int, Union[Comic, ComicMessage]], brand: Brand,
                             start: discord.Message = None):
