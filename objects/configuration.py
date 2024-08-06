@@ -28,7 +28,7 @@ brand_links = {
 
 brand_default_days = {
     Brand.MARVEL: 1,
-    Brand.DC: 3
+    Brand.DC: 4
 }
 
 
