@@ -17,7 +17,7 @@ class Zelma(commands.Bot):
 
 
 intents = discord.Intents.default()
-intents.message_content = True
+# intents.message_content = True
 
 description = "Weekly Comics"
 bot = Zelma(
