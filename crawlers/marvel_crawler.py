@@ -1,4 +1,5 @@
-from typing import Dict
+import json
+from typing import Dict, List
 
 import aiohttp
 from bs4 import BeautifulSoup
@@ -18,8 +19,46 @@ async def marvel_from_API(marvel):
         c.copyright = m_copyright
     return {c.id: c for c in comics}
 
+async def marvel_page_from_soup_to_json(url):
+    async with aiohttp.ClientSession() as cs:
+        async with cs.get(url) as r:
+            page = await r.text()
+    soup = BeautifulSoup(page, 'html.parser')
 
-async def marvel_from_soup():
+    script_tag = soup.find('script', text=lambda t: t and '__marvel-fitt__' in t)
+    if script_tag is None:
+        return {}
+
+    script_content = script_tag.string
+    json_data = script_content.split('window[\'__marvel-fitt__\']=', 1)[1].rsplit(';', 1)[0]
+    return json.loads(json_data)
+
+async def marvel_from_soup(issues: List[int] = None) -> Dict[int, str]:
+    descs: Dict[int, str] = {}
+
+    data = await marvel_page_from_soup_to_json("https://marvel.com/comics/calendar/")
+    content_dict = data['page']['content']['allComicsReleases']['content']
+    urls = [c['url'] for c in content_dict]
+
+    for url in urls:
+        if issues is not None:
+            issue_id = int(url.strip('https://www.marvel.com/comics/issue/').split('/')[0])
+            if issue_id not in issues:
+                continue
+
+        data = await marvel_page_from_soup_to_json(url)
+        if data is None:
+            continue
+
+        issue_details = data['page']['content']['issueDetails']
+        issue_id = issue_details['id']
+        issue_desc = issue_details['desc']
+        descs[issue_id] = issue_desc
+
+    return descs
+
+
+async def marvel_from_soup_old():
     async with aiohttp.ClientSession() as cs:
         async with cs.get("https://marvel.com/comics/calendar/") as r:
             page = await r.text()
@@ -57,7 +96,7 @@ async def marvel_from_soup():
 
 async def marvel_crawl(marvel) -> Dict[int, Comic]:
     comics = await marvel_from_API(marvel)
-    descs = await marvel_from_soup()
+    descs = await marvel_from_soup([c.id for c in comics.values() if c.description is None])
     print(len(comics), len(descs))
 
     for k, c in comics.items():
