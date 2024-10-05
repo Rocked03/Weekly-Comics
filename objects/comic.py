@@ -119,6 +119,7 @@ def comic_obj_from_marvel(data: mcom.Comic):
     c.url = next((i['url'] for i in data.urls if i['type'] == 'detail'), None)
     c.price = next((i.price for i in data.prices if i.type == 'printPrice'), None)
     c.date = next((i.date for i in data.dates if i.type == 'onsaleDate'), None)
+    c.description = data.description if data.description else None
 
     for cr in data.creators.items:
         role = cr.role.title()

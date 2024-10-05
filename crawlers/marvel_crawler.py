@@ -62,6 +62,7 @@ async def marvel_crawl(marvel) -> Dict[int, Comic]:
 
     for k, c in comics.items():
         if k in descs:
-            comics[k].description = descs[k]
+            if c.description is None:
+                comics[k].description = descs[k]
 
     return comics
