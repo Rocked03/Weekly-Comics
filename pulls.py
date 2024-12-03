@@ -271,7 +271,7 @@ class PullsCog(commands.Cog, name="Pulls"):
         embeds = []
         embed = empty_embed.copy()
         for n, cid in enumerate(self.order[brand]):
-            if not n % 25:
+            if not n % 20:
                 if n:
                     embeds.append(embed.copy())
                 embed = empty_embed.copy()
