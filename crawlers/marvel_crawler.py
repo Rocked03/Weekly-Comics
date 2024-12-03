@@ -9,7 +9,7 @@ from objects.configuration import Brand
 
 
 async def marvel_from_API(marvel):
-    raw = await marvel.get_comics(format='comic', dateDescriptor='thisWeek', noVariants='true', limit=100)
+    raw = await marvel.get_comics(format='comic', dateDescriptor='thisWeek', limit=100)
 
     m_copyright = raw.dict['attributionText']
 
@@ -17,7 +17,7 @@ async def marvel_from_API(marvel):
     for c in comics:
         c.brand = Brand.MARVEL
         c.copyright = m_copyright
-    return {c.id: c for c in comics}
+    return {c.id: c for c in comics if c.isVariant is False}
 
 async def marvel_page_from_soup_to_json(url):
     async with aiohttp.ClientSession() as cs:

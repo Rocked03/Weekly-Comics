@@ -13,7 +13,7 @@ def alpha_surnames(names):
 
 class Comic:
     def __init__(self, brand: Brand = None, id=None, title=None, description=None, creators=None, image_url=None,
-                 url=None, page_count=None, price=None, copyright=None, date=None, **kwargs):
+                 url=None, page_count=None, price=None, copyright=None, date=None, isVariant=False, **kwargs):
         if creators is None:
             creators = {}
 
@@ -30,6 +30,8 @@ class Comic:
         self.date: datetime = date
         self.page_count: int = page_count
         self.price: float = price
+
+        self.isVariant: bool = isVariant
 
         self.copyright: str = copyright
 
@@ -120,6 +122,7 @@ def comic_obj_from_marvel(data: mcom.Comic):
     c.price = next((i.price for i in data.prices if i.type == 'printPrice'), None)
     c.date = next((i.date for i in data.dates if i.type == 'onsaleDate'), None)
     c.description = data.description if data.description else None
+    c.isVariant = bool(data.dict['variantDescription'])
 
     for cr in data.creators.items:
         role = cr.role.title()
