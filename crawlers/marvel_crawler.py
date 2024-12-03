@@ -9,7 +9,7 @@ from objects.configuration import Brand
 
 
 async def marvel_from_API(marvel):
-    raw = await marvel.get_comics(format='comic', dateDescriptor='thisWeek', limit=100)
+    raw = await marvel.get_comics(format='comic', dateDescriptor='thisWeek', noVariants='true', limit=100)
 
     m_copyright = raw.dict['attributionText']
 
