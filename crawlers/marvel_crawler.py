@@ -38,7 +38,7 @@ async def marvel_from_soup(issues: List[int] = None) -> Dict[int, str]:
 
     data = await marvel_page_from_soup_to_json("https://marvel.com/comics/calendar/")
     content_dict = data['page']['content']['allComicsReleases']['content']
-    urls = [c['url'] for c in content_dict]
+    urls = [c['url'] for c in content_dict if 'url' in c]
 
     for url in urls:
         if issues is not None:
