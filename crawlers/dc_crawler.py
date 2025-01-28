@@ -40,7 +40,7 @@ async def dc_from_soup():
         txt = soup.find_all(class_="sc-g8nqnn-0")
 
         if not txt:
-            print(txt)
+            continue
         c_type = ''.join(txt[0].find('p', class_='text-left').contents).strip()
         if c_type != "COMIC BOOK":
             continue
