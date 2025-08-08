@@ -3,7 +3,7 @@ from enum import Enum
 
 import discord
 from asyncpg import Record, Pool
-from discord import app_commands
+from discord import app_commands, utils
 
 from objects.brand import Brands
 from types.brand import Brand
@@ -29,7 +29,7 @@ class Configuration:
                  server_id: int,
                  channel_id: int,
                  brand: Brand, *,
-                 format: Format = Format.SUMMARY,
+                 _format: Format = Format.SUMMARY,
                  day: int = 1,
                  ping: int = None,
                  pin: bool = False,
@@ -37,7 +37,7 @@ class Configuration:
                  ):
         self.server_id = server_id
         self.channel_id = channel_id
-        self.format = format
+        self.format = _format
         self.brand = brand
         self.day = day
         self.ping = ping
@@ -86,8 +86,8 @@ def config_from_record(record: Record):
     return Configuration(
         record['server'],
         record['channel'],
-        brand=Brands[record['brand']],
-        format=Format[record['format']],
+        brand=Brands()[record['brand']],
+        _format=Format[record['format']],
         day=record['day'],
         ping=record['ping'],
         pin=record['pin'],
@@ -96,11 +96,11 @@ def config_from_record(record: Record):
 
 
 def next_scheduled(day: int):
-    now = dt.datetime.utcnow().date()
+    now = utils.utcnow().date()
     soon = now + dt.timedelta(days=(day - now.weekday()) % 7)
     time = dt.time(hour=1, minute=30)
     combined = dt.datetime.combine(soon, time, tzinfo=dt.timezone.utc)
-    if combined < discord.utils.utcnow():
+    if combined < utils.utcnow():
         combined += dt.timedelta(days=7)
     return combined
 

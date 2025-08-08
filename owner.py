@@ -13,6 +13,7 @@ def is_owner(interaction: discord.Interaction) -> bool:
     return interaction.user.id in ADMIN_USER_IDS
 
 
+# noinspection GrazieInspection
 class OwnerCog(commands.Cog, name="Owner"):
     """Owner commands"""
 
@@ -48,7 +49,7 @@ class OwnerCog(commands.Cog, name="Owner"):
         return
 
     @cogs.command(name='load')
-    async def loadcog(self, ctx, *, cog: str):
+    async def load_cog(self, ctx, *, cog: str):
         """Loads cog. Remember to use dot path. e.g: cogs.owner"""
         try:
             await self.bot.load_extension(cog)
@@ -61,10 +62,10 @@ class OwnerCog(commands.Cog, name="Owner"):
         print('---')
 
     @cogs.command(name='unload')
-    async def unloadcog(self, ctx, *, cog: str):
+    async def unload_cog(self, ctx, *, cog: str):
         """Unloads cog. Remember to use dot path. e.g: cogs.owner"""
         try:
-            await self.canceltasks(cog)
+            await self.cancel_tasks(cog)
             await self.bot.unload_extension(cog)
         except Exception as e:
             return await ctx.send(f'**ERROR:** {type(e).__name__} - {e}')
@@ -75,26 +76,27 @@ class OwnerCog(commands.Cog, name="Owner"):
         print('---')
 
     @cogs.command(name='reload')
-    async def reloadcog(self, ctx, *, cog: str):
+    async def reload_cog(self, ctx, *, cog: str):
         """Reloads cog. Remember to use dot path. e.g: cogs.owner"""
         try:
-            await self.canceltasks(cog)
+            await self.cancel_tasks(cog)
             await self.bot.reload_extension(cog)
         except Exception as e:
             return await ctx.send(f'**ERROR:** {type(e).__name__} - {e}')
         else:
             await ctx.send(f'Successfully reloaded `{cog}`.')
-        self.bot.recentcog = cog
+        self.bot.recent_cog = cog
         print('---')
         print(f'{cog} was reloaded.')
         print('---')
 
     @commands.command(hidden=True, aliases=['crr'])
-    async def cogrecentreload(self, ctx):
+    async def cog_recent_reload(self, ctx):
         """Reloads most recent reloaded cog"""
-        if not self.bot.recentcog: return await ctx.send("You haven't recently reloaded any cogs.")
+        if not self.bot.recent_cog:
+            return await ctx.send("You haven't recently reloaded any cogs.")
 
-        return await ctx.invoke(self.reloadcog, cog=self.bot.recentcog)
+        return await ctx.invoke(self.reload_cog, cog=self.bot.recent_cog)
 
     @commands.command()
     @commands.guild_only()
@@ -126,7 +128,7 @@ class OwnerCog(commands.Cog, name="Owner"):
                     f"Synced {len(synced)} commands {'globally' if spec is None else 'to the current guild.'}"
                 )
                 return
-            except Exception as e:
+            except Exception:
                 traceback.print_exc()
                 await ctx.send("Something went wrong!")
 
@@ -142,10 +144,10 @@ class OwnerCog(commands.Cog, name="Owner"):
         await ctx.send(f"Synced the tree to {ret}/{len(guilds)}.")
         await self.load_cmds()
 
-    async def canceltasks(self, name):
-        async def canceller(self, x):
+    async def cancel_tasks(self, name):
+        async def canceller(_self, task):
             try:
-                self.bot.tasks[x].cancel()
+                _self.bot.tasks[task].cancel()
             except Exception:
                 pass
 

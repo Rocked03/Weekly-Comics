@@ -9,20 +9,25 @@ class Comic(ComicDetails):
     def __str__(self) -> str:
         return f"{self.title}"
 
+    @property
     def writer(self) -> str:
-        return ', '.join(creator.name for creator in self.creators if creator.role == "Writer")
+        return ', '.join(creator.name for creator in self.creators if "Writer" in creator.role)
 
+    @property
     def price_format(self) -> str:
         return f"${self.price:.2f} USD" if self.price is not None else None
 
+    @property
     def pages(self) -> str:
         return f"{self.pages} pages" if self.pages else None
 
+    @property
     def more(self) -> str:
         return self.url
 
+    @property
     def brand_obj(self) -> Brand:
-        return Brands[self.publisher]
+        return Brands()[self.publisher]
 
     def process_creators(self) -> dict[str, list[str]]:
         creators = [i for i in self.creators if i.type == "comic"]
@@ -61,7 +66,7 @@ class Comic(ComicDetails):
         if self.creators:
             embed.add_field(name="Creators", value=self.format_creators())
         embed.add_field(name="Info",
-                        value=f"{' · '.join(i for i in [self.format, self.price_format(), self.pages()] if i)}\n"
+                        value=f"{' · '.join(i for i in [self.format, self.price_format, self.pages] if i)}\n"
                               f"-# More details on [League of Comic Geeks]({self.url})")
 
         embed.set_footer(text=f"{self.title}")

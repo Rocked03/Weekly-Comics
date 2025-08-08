@@ -62,25 +62,25 @@ async def fetch_keywords(db: Pool, server_id: int):
     return keywords_from_records(kw, server_id)
 
 
-async def add_keyword(db: Pool, server_id: int, keyword: str, type: Types):
+async def add_keyword(db: Pool, server_id: int, keyword: str, _type: Types):
     keyword = sanitise(keyword)
     kw = await db.fetch('SELECT * FROM keywords WHERE server = $1 AND keyword = $2 AND type = $3',
-                        server_id, keyword, type.value)
+                        server_id, keyword, _type.value)
     if kw:
         return False
 
     await db.execute('INSERT INTO keywords (server, keyword, type) VALUES ($1, $2, $3)',
-                     server_id, keyword, type.value)
+                     server_id, keyword, _type.value)
     return True
 
 
-async def delete_keyword(db: Pool, server_id: int, keyword: str, type: Types):
+async def delete_keyword(db: Pool, server_id: int, keyword: str, _type: Types):
     keyword = sanitise(keyword)
     kw = await db.fetch('SELECT * FROM keywords WHERE server = $1 AND keyword = $2 AND type = $3',
-                        server_id, keyword, type.value)
+                        server_id, keyword, _type.value)
     if not kw:
         return False
 
     await db.execute('DELETE FROM keywords WHERE server = $1 AND keyword = $2 AND type = $3',
-                     server_id, keyword, type.value)
+                     server_id, keyword, _type.value)
     return True

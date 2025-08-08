@@ -190,7 +190,8 @@ class PullsCog(commands.Cog, name="Pulls"):
             self.comics[current_brand] = await fetch_comic_releases_detailed(publisher=brand_obj.locg_id)
             self.sort_order(brand_obj)
             print(
-                f"   > {len(self.comics[current_brand.value])} loaded, filtered to {len(self.order[current_brand.value])}")
+                f"   > {len(self.comics[current_brand.value])} loaded, "
+                f"filtered to {len(self.order[current_brand.value])}")
 
         print(f"~~ Comics fetched ~~   {utils.utcnow()}")
 
@@ -271,10 +272,10 @@ class PullsCog(commands.Cog, name="Pulls"):
                 c = comics[cid]
 
                 info = []
-                if c.writer():
-                    info.append(f"{c.writer()}")
+                if c.writer:
+                    info.append(f"{c.writer}")
                 if c.url:
-                    info.append(f"[More]({c.more()})")
+                    info.append(f"[More]({c.more})")
 
                 embed.add_field(name=c.title,
                                 value=" · ".join(info) if info else "···",
@@ -418,12 +419,12 @@ class PullsCog(commands.Cog, name="Pulls"):
         format=format_autocomplete
     )
     async def setup(self, interaction: Interaction, brand: str, channel: TextChannel = None,
-                    format: str = "Summary"):
+                    _format: str = "Summary"):
         """Sets up a comic pulls feed."""
         await interaction.response.defer()
 
         b = self.brands[brand]
-        f = Format(format)
+        f = Format(_format)
         configs = await self.fetch_configs(interaction.guild_id)
 
         if channel is None:
@@ -435,7 +436,7 @@ class PullsCog(commands.Cog, name="Pulls"):
         new_config = Configuration(
             interaction.guild_id,
             channel.id,
-            brand=b, format=f, day=b.default_day
+            brand=b, _format=f, day=b.default_day
         )
 
         await new_config.upload_to_sql(self.bot.db)
@@ -491,11 +492,11 @@ class PullsCog(commands.Cog, name="Pulls"):
         brand=BrandAutocomplete,
         format=format_autocomplete
     )
-    async def config_format(self, interaction: Interaction, format: str, brand: str = None):
+    async def config_format(self, interaction: Interaction, _format: str, brand: str = None):
         """Sets the format type of the feed."""
         await interaction.response.defer()
 
-        f = Format(format)
+        f = Format(_format)
         txt = await self.edit_config(interaction, brand, {'format': f})
         if txt:
             txt.append(f"Set format to: {f.value}")
@@ -576,7 +577,7 @@ class PullsCog(commands.Cog, name="Pulls"):
             await interaction.followup.send('\n'.join(txt))
 
     async def edit_config(self, interaction: Interaction, brand: str, attributes: Dict[str, Any]):
-        b = Brand(brand) if brand else None
+        b = self.brands[brand] if brand else None
 
         configs = await self.fetch_configs(interaction.guild_id)
         if not configs:
@@ -607,7 +608,7 @@ class PullsCog(commands.Cog, name="Pulls"):
         """Deletes a feed. Dangerous!"""
         await interaction.response.defer()
 
-        b = Brand(brand)
+        b = self.brands[brand]
         configs = await self.fetch_configs(interaction.guild_id)
 
         if b not in configs:
@@ -701,10 +702,10 @@ class PullsCog(commands.Cog, name="Pulls"):
         """Add a keyword to be filter creators."""
         await self.add_kw(interaction, keyword, Types.CREATORS)
 
-    async def add_kw(self, interaction: Interaction, keyword: str, type: Types):
+    async def add_kw(self, interaction: Interaction, keyword: str, _type: Types):
         await interaction.response.defer()
         keyword = sanitise(keyword)
-        success = await add_keyword(self.bot.db, interaction.guild_id, keyword, type)
+        success = await add_keyword(self.bot.db, interaction.guild_id, keyword, _type)
 
         if success:
             return await interaction.followup.send(f'Successfully added "{keyword}" to your keyword filter!')
@@ -725,10 +726,10 @@ class PullsCog(commands.Cog, name="Pulls"):
         """Delete a creator filter keyword."""
         await self.delete_kw(interaction, keyword, Types.CREATORS)
 
-    async def delete_kw(self, interaction: Interaction, keyword: str, type: Types):
+    async def delete_kw(self, interaction: Interaction, keyword: str, _type: Types):
         await interaction.response.defer()
         keyword = sanitise(keyword)
-        success = await delete_keyword(self.bot.db, interaction.guild_id, keyword, type)
+        success = await delete_keyword(self.bot.db, interaction.guild_id, keyword, _type)
 
         if success:
             return await interaction.followup.send(f'Successfully deleted "{keyword}" from your keyword filter!')
@@ -737,16 +738,16 @@ class PullsCog(commands.Cog, name="Pulls"):
 
     @kw_delete_key.autocomplete("keyword")
     async def kw_delete_autocomplete(self, interaction: Interaction, current: str):
-        return await self.autocomplete_kw(interaction, current, type=Types.KEYS)
+        return await self.autocomplete_kw(interaction, current, _type=Types.KEYS)
 
     @kw_delete_creator.autocomplete("keyword")
     async def kw_delete_autocomplete(self, interaction: Interaction, current: str):
-        return await self.autocomplete_kw(interaction, current, type=Types.CREATORS)
+        return await self.autocomplete_kw(interaction, current, _type=Types.CREATORS)
 
-    async def autocomplete_kw(self, interaction: Interaction, current: str, *, type: Types):
+    async def autocomplete_kw(self, interaction: Interaction, current: str, *, _type: Types):
         current = sanitise(current)
         kws = await self.bot.db.fetch('SELECT (keyword) FROM keywords WHERE server = $1 AND type = $2',
-                                      interaction.guild_id, type.value)
+                                      interaction.guild_id, _type.value)
 
         kw = [i['keyword'] for i in kws if current in i['keyword']]
         kw.sort()

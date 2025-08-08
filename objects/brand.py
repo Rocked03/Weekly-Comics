@@ -7,8 +7,11 @@ from types.brand import Brand
 
 
 class BrandEnum(Enum):
-    MARVEL = 'Marvel'
+    MARVEL = 'MARVEL'
     DC = 'DC'
+    DarkHorse = 'DARK_HORSE'
+    IDW = 'IDW'
+    Image = 'IMAGE'
 
 
 class Brands:
@@ -52,9 +55,45 @@ class DC(Brand):
             id=BrandEnum.DC.value,
             name="DC",
             color=0x0074e8,
-            default_day=4,
+            default_day=1,
             autocomplete_choice=Choice(name='DC', value=BrandEnum.DC.value),
             locg_id=1,
+        )
+
+
+class DarkHorse(Brand):
+    def __init__(self):
+        super().__init__(
+            id=BrandEnum.DarkHorse.value,
+            name="Dark Horse",
+            color=0x000000,
+            default_day=1,
+            autocomplete_choice=Choice(name='Dark Horse', value=BrandEnum.DarkHorse.value),
+            locg_id=5,
+        )
+
+
+class IDW(Brand):
+    def __init__(self):
+        super().__init__(
+            id=BrandEnum.IDW.value,
+            name="IDW",
+            color=0xf37164,
+            default_day=1,
+            autocomplete_choice=Choice(name='IDW', value=BrandEnum.IDW.value),
+            locg_id=6,
+        )
+
+
+class Image(Brand):
+    def __init__(self):
+        super().__init__(
+            id=BrandEnum.Image.value,
+            name="Image",
+            color=0xFFFFFF,
+            default_day=1,
+            autocomplete_choice=Choice(name='Image', value=BrandEnum.Image.value),
+            locg_id=7,
         )
 
 
