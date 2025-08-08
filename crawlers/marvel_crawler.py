@@ -4,7 +4,7 @@ from typing import Dict, List
 import aiohttp
 from bs4 import BeautifulSoup
 
-from objects.comic import comic_obj_from_marvel, Comic
+from objects.comicOld import comic_obj_from_marvel, Comic
 from objects.configuration import Brand
 
 

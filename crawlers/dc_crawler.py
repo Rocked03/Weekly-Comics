@@ -4,7 +4,7 @@ from typing import Dict
 import aiohttp
 from bs4 import BeautifulSoup, Tag, NavigableString
 
-from objects.comic import Comic
+from objects.comicOld import Comic
 from objects.configuration import Brand
 
 

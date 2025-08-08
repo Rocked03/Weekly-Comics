@@ -3,7 +3,7 @@ from typing import List
 
 from asyncpg import Record, Pool
 
-from objects.comic import Comic
+from objects.comicOld import Comic
 
 
 def sanitise(s: str):

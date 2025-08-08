@@ -19,7 +19,7 @@ from discord.ext import commands
 import marvel.marvel as marvel
 
 from funcs.profile import load_image, Profile, imager_to_bytes
-from objects.comic import Comic, ComicMessage
+from objects.comicOld import Comic, ComicMessage
 from config import marvelKey_public, marvelKey_private, ADMIN_USER_IDS, ADMIN_GUILD_IDS
 from objects.configuration import Configuration, Format, Brand, brand_colours, config_from_record, format_autocomplete, \
     brand_autocomplete, weekdays, next_scheduled, brand_links, brand_default_days
