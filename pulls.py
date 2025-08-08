@@ -1,31 +1,28 @@
 import asyncio
 import copy
-import datetime
 import functools
 import random
 import traceback
 from asyncio import Task
 from io import BytesIO
-from typing import Dict, List, Any, Optional, Union
+from typing import Dict, List, Any, Union
 import datetime as dt
-from importlib import reload
 
 import discord
 from discord import *
 from discord.app_commands import *
 from discord.app_commands.tree import _log
 from discord.ext import commands
-# from marvel.marvel import Marvel  # pip install -U git+https://github.com/Rocked03/PyMarvel#egg=PyMarvel
-import marvel.marvel as marvel
 
 from funcs.profile import load_image, Profile, imager_to_bytes
-from objects.comicOld import Comic, ComicMessage
+from objects.brand import Brands, BrandEnum, BrandAutocomplete, Marvel
+from objects.comic import Comic, ComicMessage
 from config import ADMIN_USER_IDS, ADMIN_GUILD_IDS
-from objects.configuration import Configuration, Format, Brand, brand_colours, config_from_record, format_autocomplete, \
-    brand_autocomplete, weekdays, next_scheduled, brand_links, brand_default_days
-from crawlers.dc_crawler import dc_crawl
-from crawlers.marvel_crawler import marvel_crawl
+from objects.configuration import Configuration, Format, config_from_record, format_autocomplete, \
+    WEEKDAYS, next_scheduled
 from objects.keywords import fetch_keywords, sanitise, add_keyword, Types, delete_keyword
+from services.comic_releases import fetch_comic_releases_detailed
+from types.brand import Brand
 
 
 async def on_app_command_error(interaction: Interaction, error: AppCommandError):
@@ -40,13 +37,14 @@ async def on_app_command_error(interaction: Interaction, error: AppCommandError)
 async def check_brand(brand: str, interaction: discord.Interaction = None):
     if brand is None:
         return None
-    if brand not in [i.value for i in dict(Brand.__members__).values()]:
-        if interaction: await interaction.followup.send("That is not a valid brand.")
+    if brand not in Brands.keys():
+        if interaction:
+            await interaction.followup.send("That is not a valid brand.")
         return False
-    return Brand(brand)
+    return Brands[brand]
 
 
-def f_date(date: dt.datetime):
+def f_date(date: dt.date):
     return f"{date:%d %B %Y}".lstrip("0")
 
 
@@ -59,10 +57,8 @@ class PullsCog(commands.Cog, name="Pulls"):
         self.bot: commands.Bot = bot
         self.bot.tree.on_error = on_app_command_error
 
-        self.comics: Dict[Brand, Dict[int, Comic]] = {}
-        self.order = {b: [] for b in Brand}
-        self.copyright = {b: None for b in Brand}
-        self.date: Dict[Brand, Optional[dt.datetime]] = {b: None for b in Brand}
+        self.comics: Dict[str, Dict[int, Comic]] = {}
+        self.order = {b: [] for b in Brands.keys()}
 
         self.access_lock = asyncio.Lock()
         self.locks: Dict[int, asyncio.Lock] = {}
@@ -95,7 +91,7 @@ class PullsCog(commands.Cog, name="Pulls"):
             except Exception:
                 traceback.print_exc()
 
-            now = dt.datetime.utcnow().date()
+            now = utils.utcnow()
             time = dt.datetime.combine(now, dt.time(0), tzinfo=dt.timezone.utc)
             time += dt.timedelta(hours=1, minutes=15)
             sleep_duration = time - discord.utils.utcnow()
@@ -110,7 +106,7 @@ class PullsCog(commands.Cog, name="Pulls"):
             await asyncio.sleep(60)
 
         while not self.bot.is_closed():
-            now = dt.datetime.utcnow().date()
+            now = utils.utcnow()
             time = dt.datetime.combine(now, dt.time(0), tzinfo=dt.timezone.utc)
             time -= dt.timedelta(minutes=15)
             sleep_duration = time - discord.utils.utcnow()
@@ -183,39 +179,29 @@ class PullsCog(commands.Cog, name="Pulls"):
     async def fetch_comics(self):
         print(f"~~ Fetching comics ~~   {discord.utils.utcnow()}")
         self.comics = {}
-        self.date = {}
         self.order = {}
 
-        print(" > Fetching Marvel")
-        reload(marvel)
-        self.comics[Brand.MARVEL] = await marvel_crawl(marvel.Marvel(marvelKey_public, marvelKey_private))
-        self.filter_date(Brand.MARVEL, self.comics[Brand.MARVEL])
-        print(f" > Fetched Marvel for date {self.date[Brand.MARVEL]}")
-        print(f"   > {len(self.comics[Brand.MARVEL])} loaded, filtered to {len(self.order[Brand.MARVEL])}")
-
-        print(" > Fetching DC")
-        self.comics[Brand.DC] = await dc_crawl()
-        self.filter_date(Brand.DC, self.comics[Brand.DC])
-        print(f" > Fetched DC for date {self.date[Brand.DC]}")
-        print(f"   > {len(self.comics[Brand.DC])} loaded, filtered to {len(self.order[Brand.DC])}")
+        for current_brand in BrandEnum:
+            brand_obj = Brands[current_brand.value]
+            print(f" > Fetching {brand_obj.name}")
+            self.comics[current_brand] = await fetch_comic_releases_detailed(publisher=brand_obj.locg_id)
+            self.sort_order(brand_obj)
+            print(f"   > {len(self.comics[current_brand.value])} loaded, filtered to {len(self.order[current_brand.value])}")
 
         print(f"~~ Comics fetched ~~   {discord.utils.utcnow()}")
 
-    def filter_date(self, b, c):
-        if c:
-            # self.date[b] = dt.datetime(1, 1, 1)
-            # for i in c.values():
-            #     if i.date > self.date[b]:
-            #         self.date[b] = i.date
-            self.date[b] = max(i.date for i in c.values())
-        else:
-            self.date[b] = None
+    def sort_order(self, brand: Brand):
+        comics = self.comics[brand.id]
+        format_order = ["Comic", "Trade Paperback", "Hardcover"]
 
-        self.order[b] = sorted([k for k, v in c.items() if (self.date[b] - v.date) <= datetime.timedelta(days=7)],
-                               key=lambda x: c[x].title)
-
-        if c:
-            self.copyright[b] = c[self.order[b][0]].copyright
+        self.order[brand.id] = sorted(
+            comics.keys(),
+            key=lambda x: (
+                format_order.index(comics[x].format) if comics[x].format in format_order else 100,
+                comics[x].releaseDate,
+                comics[x].title.lower()
+            )
+        )
 
     async def send_comics(self, config: Configuration):
         await self.check_lock(config.channel_id)
@@ -224,7 +210,7 @@ class PullsCog(commands.Cog, name="Pulls"):
 
             channel = self.bot.get_channel(config.channel_id)
 
-            comics: Dict[int, Union[Comic, ComicMessage]] = self.comics[config.brand].copy()
+            comics: Dict[int, Union[Comic, ComicMessage]] = self.comics[config.brand.id].copy()
 
             if config.check_keywords:
                 kw = await fetch_keywords(self.bot.db, config.server_id)
@@ -234,7 +220,8 @@ class PullsCog(commands.Cog, name="Pulls"):
                 if comics:
                     lead_msg = None
                     if format in [Format.FULL, Format.COMPACT]:
-                        lead_msg = await channel.send(f"## {config.brand.value} Comics - {f_date(self.date[config.brand])}")
+                        date = min(c.releaseDate for c in comics.values() if c.format == "Comic")
+                        lead_msg = await channel.send(f"## {config.brand.name} Comics - {f_date(date)}")
                         if config.pin:
                             await self.pin(lead_msg)
 
@@ -246,7 +233,7 @@ class PullsCog(commands.Cog, name="Pulls"):
 
                         instances = {}
 
-                        for cid in self.order[config.brand]:
+                        for cid in self.order[config.brand.id]:
                             if cid in comics:
                                 msg = await channel.send(embed=embeds[cid])
                                 instances[cid] = comics[cid].to_instance(msg)
@@ -260,13 +247,13 @@ class PullsCog(commands.Cog, name="Pulls"):
                         await self.pin(summ_msg)
 
                 else:
-                    await channel.send(f"There are no {config.brand.value} comics this week.")
+                    await channel.send(f"There are no {config.brand.name} comics this week.")
             except Forbidden:
                 print(f"Missing permissions in {channel.guild.name} ({channel.guild.id})")
 
     async def summary_embed(self, comics: Dict[int, Union[Comic, ComicMessage]], brand: Brand,
                             start: discord.Message = None):
-        empty_embed = discord.Embed(color=brand_colours[brand])
+        empty_embed = discord.Embed(color=brand.color)
 
         embeds = []
         embed = empty_embed.copy()
@@ -290,24 +277,22 @@ class PullsCog(commands.Cog, name="Pulls"):
                                 inline=True)
         embeds.append(embed)
 
-        embeds[0].title = f"{brand.value} Comics Releases Summary - {f_date(self.date[brand])}"
-        if self.copyright[brand]:
-            embeds[-1].set_footer(text=self.copyright[brand])
+        date = min(c.releaseDate for c in comics.values() if c.format == "Comic")
+        embeds[0].title = f"{brand.name} Comics Releases Summary - {f_date(date)}"
 
         embed = empty_embed.copy()
-        # embed.set_footer(text=f"Data obtained by Rocked03 from {brand_links[brand]}.")
         description = []
         if start:
             description.append(f"*Jump to the [beginning]({start.jump_url}).*")
-        description.append(f"-# Data obtained by Rocked03 from {brand_links[brand]}.")
+        description.append(f"-# Data obtained from [League of Comic Geeks](https://leagueofcomicgeeks.com/).")
         embed.description = "\n".join(description)
         embeds.append(embed)
 
         return embeds
 
     async def profile_pic(self):
-        m_ims = random.sample([i.image_url for i in self.comics[Brand.MARVEL].values() if i.image_url], 2)
-        d_ims = random.sample([i.image_url for i in self.comics[Brand.DC].values() if i.image_url], 2)
+        m_ims = random.sample([i.coverImage for i in self.comics[BrandEnum.MARVEL.value].values() if i.coverImage], 2)
+        d_ims = random.sample([i.coverImage for i in self.comics[BrandEnum.DC.value].values() if i.coverImage], 2)
         ims = [await load_image(i) for i in m_ims] + [await load_image(i) for i in d_ims]
 
         p = Profile(ims, 1200, 70, 300, 600,
@@ -332,7 +317,7 @@ class PullsCog(commands.Cog, name="Pulls"):
 
         con = await self.bot.db.fetch(
             'SELECT * FROM configuration WHERE server = $1 AND brand = $2',
-            interaction.guild_id, Brand.MARVEL.name
+            interaction.guild_id, Marvel.id
         )
 
         for c in con:
@@ -363,21 +348,21 @@ class PullsCog(commands.Cog, name="Pulls"):
         return {c.brand: c for c in configs}
 
     @app_commands.command(name="comics-this-week")
-    @app_commands.choices(brand=brand_autocomplete)
+    @app_commands.choices(brand=BrandAutocomplete)
     async def comics_this_week(self, interaction: discord.Interaction, brand: str):
         """Lists this week's comics!"""
         await interaction.response.defer(
             ephemeral=not interaction.channel.permissions_for(interaction.user).embed_links)
-        b = Brand(brand)
+        b = Brands[brand]
 
-        if b not in self.comics:
+        if b.id not in self.comics:
             return await interaction.followup.send("Comics are not yet fetched.")
 
-        comics = self.comics[b]
+        comics = self.comics[b.id]
 
         con = await self.bot.db.fetch(
             'SELECT * FROM configuration WHERE server = $1 and brand = $2',
-            interaction.guild_id, b.name
+            interaction.guild_id, b.id
         )
 
         if con:
@@ -391,24 +376,24 @@ class PullsCog(commands.Cog, name="Pulls"):
 
     @app_commands.command(name="trigger-feed")
     @checks.has_permissions(manage_guild=True)
-    @app_commands.choices(brand=brand_autocomplete)
+    @app_commands.choices(brand=BrandAutocomplete)
     async def trigger_feed(self, interaction: discord.Interaction, brand: str):
         """Triggers your current feed configuration."""
         await interaction.response.defer()
-        b = Brand(brand)
+        b = Brands[brand]
 
-        if b not in self.comics.keys():
+        if b.id not in self.comics.keys():
             return await interaction.followup.send(
                 "Comics are not yet fetched. Please wait a few moments and try again.")
 
         con = await self.bot.db.fetch(
             'SELECT * FROM configuration WHERE server = $1 and brand = $2',
-            interaction.guild_id, b.name
+            interaction.guild_id, b.id
         )
 
         if not con:
             return await interaction.followup.send(
-                f"You have not set up a {b.value} feed yet in this server! Use {self.cmd_ping('setup')} to set one up!")
+                f"You have not set up a {b.name} feed yet in this server! Use {self.cmd_ping('setup')} to set one up!")
 
         configs = [config_from_record(c) for c in con]
         for c in configs:
@@ -425,7 +410,7 @@ class PullsCog(commands.Cog, name="Pulls"):
         format="Feed format. Use /formats to view options. Summary is default."
     )
     @app_commands.choices(
-        brand=brand_autocomplete,
+        brand=BrandAutocomplete,
         format=format_autocomplete
     )
     async def setup(self, interaction: discord.Interaction, brand: str, channel: discord.TextChannel = None,
@@ -437,7 +422,8 @@ class PullsCog(commands.Cog, name="Pulls"):
         f = Format(format)
         configs = await self.fetch_configs(interaction.guild_id)
 
-        if channel is None: channel = interaction.channel
+        if channel is None:
+            channel = interaction.channel
 
         if b in configs:
             return await interaction.followup.send("You have already set up a feed for this brand in this server.")
@@ -445,7 +431,7 @@ class PullsCog(commands.Cog, name="Pulls"):
         new_config = Configuration(
             interaction.guild_id,
             channel.id,
-            brand=b, format=f, day=brand_default_days[b]
+            brand=b, format=f, day=b.default_day
         )
 
         await new_config.upload_to_sql(self.bot.db)
@@ -481,7 +467,7 @@ class PullsCog(commands.Cog, name="Pulls"):
         channel="The channel to set the feed to.",
         brand="The brand feed to set. Leave empty to edit all feed configurations."
     )
-    @app_commands.choices(brand=brand_autocomplete)
+    @app_commands.choices(brand=BrandAutocomplete)
     async def config_channel(self, interaction: discord.Interaction, channel: discord.TextChannel, brand: str = None):
         """Sets the channel of the feed. Must have Manage Server permissions."""
         await interaction.response.defer()
@@ -498,7 +484,7 @@ class PullsCog(commands.Cog, name="Pulls"):
         brand="The brand feed to set. Leave empty to edit all feed configurations."
     )
     @app_commands.choices(
-        brand=brand_autocomplete,
+        brand=BrandAutocomplete,
         format=format_autocomplete
     )
     async def config_format(self, interaction: discord.Interaction, format: str, brand: str = None):
@@ -519,8 +505,8 @@ class PullsCog(commands.Cog, name="Pulls"):
         brand="The brand feed to set. Leave empty to edit all feed configurations."
     )
     @app_commands.choices(
-        brand=brand_autocomplete,
-        day=[app_commands.Choice(name=i, value=n) for n, i in enumerate(weekdays)]  # if n in [1, 2, 3]]
+        brand=BrandAutocomplete,
+        day=[app_commands.Choice(name=i, value=n) for n, i in enumerate(WEEKDAYS)]  # if n in [1, 2, 3]]
     )
     async def config_day(self, interaction: discord.Interaction, day: int, brand: str = None):
         """Sets the day of the weekly feed."""
@@ -528,7 +514,7 @@ class PullsCog(commands.Cog, name="Pulls"):
 
         txt = await self.edit_config(interaction, brand, {'day': day})
         if txt:
-            txt.append(f"Set feed weekday to: {weekdays[day]}")
+            txt.append(f"Set feed weekday to: {WEEKDAYS[day]}")
             await interaction.followup.send('\n'.join(txt))
 
     @edit_group.command(name="ping")
@@ -538,7 +524,7 @@ class PullsCog(commands.Cog, name="Pulls"):
              "This role must be pingable, or the bot must have @everyone perms in the channel.",
         brand="The brand feed to set. Leave empty to edit all feed configurations."
     )
-    @app_commands.choices(brand=brand_autocomplete)
+    @app_commands.choices(brand=BrandAutocomplete)
     async def config_ping(self, interaction: discord.Interaction, ping: discord.Role = None, brand: str = None):
         """Sets the role ping of the feed."""
         await interaction.response.defer()
@@ -559,7 +545,7 @@ class PullsCog(commands.Cog, name="Pulls"):
         pin="Toggle whether to pin each week's listing in the channel.",
         brand="The brand feed to set. Leave empty to edit all feed configurations."
     )
-    @app_commands.choices(brand=brand_autocomplete)
+    @app_commands.choices(brand=BrandAutocomplete)
     async def config_pin(self, interaction: discord.Interaction, pin: bool, brand: str = None):
         """Toggles pinning the weekly feed. Bot must have MANAGE MESSAGE perms in the feed's channel."""
         await interaction.response.defer()
@@ -575,7 +561,7 @@ class PullsCog(commands.Cog, name="Pulls"):
         keywords="Toggle whether to filter the feed by /keywords.",
         brand="The brand feed to set. Leave empty to edit all feed configurations."
     )
-    @app_commands.choices(brand=brand_autocomplete)
+    @app_commands.choices(brand=BrandAutocomplete)
     async def config_keywords(self, interaction: discord.Interaction, keywords: bool, brand: str = None):
         """Toggles filtering the feed by /keywords."""
         await interaction.response.defer()
@@ -607,12 +593,12 @@ class PullsCog(commands.Cog, name="Pulls"):
                 self.cancel_feed(c)
                 self.schedule_feed(c)
 
-        return [f"Edited configuration(s): {', '.join(f'`{c.brand.value}`' for c in filtered)}"]
+        return [f"Edited configuration(s): {', '.join(f'`{c.brand.name}`' for c in filtered)}"]
 
     @edit_group.command(name="delete-feed")
     @checks.has_permissions(manage_guild=True)
     @app_commands.describe(brand="The comic brand feed to delete.")
-    @app_commands.choices(brand=brand_autocomplete)
+    @app_commands.choices(brand=BrandAutocomplete)
     async def delete_feed(self, interaction: discord.Interaction, brand: str):
         """Deletes a feed. Dangerous!"""
         await interaction.response.defer()
@@ -637,7 +623,7 @@ class PullsCog(commands.Cog, name="Pulls"):
 
         embeds = []
 
-        comics = list(self.comics[Brand.MARVEL].values())
+        comics = list(self.comics[BrandEnum.MARVEL.value].values())
         samples = random.sample(comics, len(comics) if 4 > len(comics) else 4)
 
         meddle: Comic = copy.copy(random.choice(samples))
@@ -657,7 +643,7 @@ class PullsCog(commands.Cog, name="Pulls"):
                              "Also followed by the 'Summary' embed."
         embeds.append(meddle.to_embed(False))
 
-        summaries = await self.summary_embed({i.id: i for i in samples}, Brand.MARVEL)
+        summaries = await self.summary_embed({i.id: i for i in samples}, Brands[BrandEnum.MARVEL.value])
         summ = summaries[0]
         summ.title = "Summary Format"
         summ.insert_field_at(0, name="This displays all comics",
@@ -685,7 +671,7 @@ class PullsCog(commands.Cog, name="Pulls"):
                                        interaction.guild_id, True)
         configs = [config_from_record(c) for c in cons]
 
-        e = discord.Embed(title="Keywords", colour=brand_colours[Brand.MARVEL])
+        e = discord.Embed(title="Keywords", colour=Marvel.color)
 
         e.add_field(name="Keys (Title & Description)",
                     value=', '.join(f'`{i}`' for i in kw.keys) if kw.keys else "None")
@@ -767,7 +753,7 @@ class PullsCog(commands.Cog, name="Pulls"):
     @app_commands.command(name="about")
     async def about(self, interaction: discord.Interaction):
         """Information about this bot."""
-        embed = discord.Embed(title="About", color=brand_colours[Brand.MARVEL])
+        embed = discord.Embed(title="About", color=Marvel.color)
         embed.description = \
             "This bot was developed by **Rocked03#3304**. Originally created for the *Marvel Discord* " \
             "(https://discord.gg/Marvel), this bot was later expanded for public use with *Marvel* and *DC* feeds " \
@@ -782,7 +768,7 @@ class PullsCog(commands.Cog, name="Pulls"):
     @app_commands.command(name="invite")
     async def invite(self, interaction: discord.Interaction):
         """Invite this bot to your own server."""
-        embed = discord.Embed(title="Invite me!", color=brand_colours[Brand.MARVEL])
+        embed = discord.Embed(title="Invite me!", color=Marvel.color)
         embed.description = \
             "**Add this bot** to your own server: " \
             f"https://discordapp.com/oauth2/authorize?client_id={self.bot.user.id}&scope=bot&permissions={'18432'}"

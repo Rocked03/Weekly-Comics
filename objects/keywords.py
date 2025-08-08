@@ -3,7 +3,7 @@ from typing import List
 
 from asyncpg import Record, Pool
 
-from objects.comicOld import Comic
+from objects.comic import Comic
 
 
 def sanitise(s: str):
@@ -32,8 +32,8 @@ class Keywords:
             return True
 
         creators = []
-        for v in comic.creators.values():
-            creators.append(' '.join(v))
+        for v in comic.creators:
+            creators.append(' '.join(v.name))
 
         if any(sanitise(i) in ' '.join(creators) for i in self.creators):
             return True

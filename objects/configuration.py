@@ -5,31 +5,10 @@ import discord
 from asyncpg import Record, Pool
 from discord import app_commands
 
+from objects.brand import Brands
+from types.brand import Brand
 
-class Brand(Enum):
-    MARVEL = "Marvel"
-    DC = "DC"
-
-
-brand_autocomplete = [
-    app_commands.Choice(name='Marvel', value='Marvel'),
-    app_commands.Choice(name='DC', value='DC')
-]
-
-brand_colours = {
-    Brand.MARVEL: 0xec1d24,
-    Brand.DC: 0x0074e8
-}
-
-brand_links = {
-    Brand.MARVEL: "Marvel.com",
-    Brand.DC: "DC.com"
-}
-
-brand_default_days = {
-    Brand.MARVEL: 1,
-    Brand.DC: 4
-}
+WEEKDAYS = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday']
 
 
 class Format(Enum):
@@ -67,15 +46,15 @@ class Configuration:
 
     def to_embed(self):
         embed = discord.Embed(
-            title=f"{self.brand.value} Configuration",
-            color=brand_colours[self.brand]
+            title=f"{self.brand.name} Configuration",
+            color=self.brand.color
         )
         embed.add_field(name="Channel", value=f"<#{self.channel_id}>")
         embed.add_field(name="Format", value=f"{self.format.value}")
         embed.add_field(name="Next Scheduled Day", value=f"<t:{int(next_scheduled(self.day).timestamp())}:D>")
         embed.add_field(name="Ping Role", value=f"<@&{self.ping}>" if self.ping else None)
         embed.add_field(name="Channel Pin", value="Enabled" if self.pin else "Disabled")
-        embed.set_footer(text=f"{self.server_id} · {self.brand.value}")
+        embed.set_footer(text=f"{self.server_id} · {self.brand.name}")
         return embed
 
     async def upload_to_sql(self, db: Pool):
@@ -107,7 +86,7 @@ def config_from_record(record: Record):
     return Configuration(
         record['server'],
         record['channel'],
-        brand=Brand[record['brand']],
+        brand=Brands[record['brand']],
         format=Format[record['format']],
         day=record['day'],
         ping=record['ping'],
@@ -128,6 +107,3 @@ def next_scheduled(day: int):
 
 def prev_scheduled(day: int):
     return next_scheduled(day) - dt.timedelta(days=7)
-
-
-weekdays = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday']

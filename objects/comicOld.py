@@ -4,7 +4,7 @@ from typing import Dict, List
 import discord as discord
 import marvel.comic as mcom
 
-from objects.configuration import brand_colours, Brand, brand_links
+from objects.configuration import brand_colours, BrandType, brand_links
 
 
 def alpha_surnames(names):
@@ -12,12 +12,12 @@ def alpha_surnames(names):
 
 
 class Comic:
-    def __init__(self, brand: Brand = None, id=None, title=None, description=None, creators=None, image_url=None,
+    def __init__(self, brand: BrandType = None, id=None, title=None, description=None, creators=None, image_url=None,
                  url=None, page_count=None, price=None, copyright=None, date=None, isVariant=False, **kwargs):
         if creators is None:
             creators = {}
 
-        self.brand: Brand = brand
+        self.brand: BrandType = brand
 
         self.id = id
         self.title: str = title

@@ -5,7 +5,7 @@ import aiohttp
 from bs4 import BeautifulSoup, Tag, NavigableString
 
 from objects.comicOld import Comic
-from objects.configuration import Brand
+from objects.configuration import BrandType
 
 
 async def dc_from_soup():
@@ -85,10 +85,10 @@ async def dc_from_soup():
 
         copyright = str(soup.find('div', class_="small legal d-inline-block").contents[0].contents[0])
 
-        c = Comic(Brand.DC, ''.join(i for i in title if i.isalnum()),
-                     title, desc,
-                     creators, image, link,
-                     page_count, price, copyright, date)
+        c = Comic(BrandType.DC, ''.join(i for i in title if i.isalnum()),
+                  title, desc,
+                  creators, image, link,
+                  page_count, price, copyright, date)
 
         comics[c.id] = c
     return comics

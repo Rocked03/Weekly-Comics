@@ -5,7 +5,7 @@ import aiohttp
 from bs4 import BeautifulSoup
 
 from objects.comicOld import comic_obj_from_marvel, Comic
-from objects.configuration import Brand
+from objects.configuration import BrandType
 
 
 async def marvel_from_API(marvel):
@@ -15,7 +15,7 @@ async def marvel_from_API(marvel):
 
     comics = [comic_obj_from_marvel(c) for c in raw.data.results]
     for c in comics:
-        c.brand = Brand.MARVEL
+        c.brand = BrandType.MARVEL
         c.copyright = m_copyright
     return {c.id: c for c in comics if c.isVariant is False}
 
