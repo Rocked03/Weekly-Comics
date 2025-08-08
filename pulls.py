@@ -35,13 +35,14 @@ async def on_app_command_error(interaction: Interaction, error: AppCommandError)
 
 
 async def check_brand(brand: str, interaction: discord.Interaction = None):
+    brands = Brands()
     if brand is None:
         return None
-    if brand not in Brands.keys():
+    if brand not in brands:
         if interaction:
             await interaction.followup.send("That is not a valid brand.")
         return False
-    return Brands[brand]
+    return brands[brand]
 
 
 def f_date(date: dt.date):
@@ -57,8 +58,10 @@ class PullsCog(commands.Cog, name="Pulls"):
         self.bot: commands.Bot = bot
         self.bot.tree.on_error = on_app_command_error
 
+        self.brands = Brands()
+
         self.comics: Dict[str, Dict[int, Comic]] = {}
-        self.order = {b: [] for b in Brands.keys()}
+        self.order: Dict[str, List[int]] = {b.id: [] for b in self.brands}
 
         self.access_lock = asyncio.Lock()
         self.locks: Dict[int, asyncio.Lock] = {}
@@ -182,7 +185,7 @@ class PullsCog(commands.Cog, name="Pulls"):
         self.order = {}
 
         for current_brand in BrandEnum:
-            brand_obj = Brands[current_brand.value]
+            brand_obj = self.brands[current_brand.value]
             print(f" > Fetching {brand_obj.name}")
             self.comics[current_brand] = await fetch_comic_releases_detailed(publisher=brand_obj.locg_id)
             self.sort_order(brand_obj)
@@ -353,7 +356,7 @@ class PullsCog(commands.Cog, name="Pulls"):
         """Lists this week's comics!"""
         await interaction.response.defer(
             ephemeral=not interaction.channel.permissions_for(interaction.user).embed_links)
-        b = Brands[brand]
+        b = self.brands[brand]
 
         if b.id not in self.comics:
             return await interaction.followup.send("Comics are not yet fetched.")
@@ -380,7 +383,7 @@ class PullsCog(commands.Cog, name="Pulls"):
     async def trigger_feed(self, interaction: discord.Interaction, brand: str):
         """Triggers your current feed configuration."""
         await interaction.response.defer()
-        b = Brands[brand]
+        b = self.brands[brand]
 
         if b.id not in self.comics.keys():
             return await interaction.followup.send(
@@ -643,7 +646,7 @@ class PullsCog(commands.Cog, name="Pulls"):
                              "Also followed by the 'Summary' embed."
         embeds.append(meddle.to_embed(False))
 
-        summaries = await self.summary_embed({i.id: i for i in samples}, Brands[BrandEnum.MARVEL.value])
+        summaries = await self.summary_embed({i.id: i for i in samples}, self.brands.Marvel)
         summ = summaries[0]
         summ.title = "Summary Format"
         summ.insert_field_at(0, name="This displays all comics",
