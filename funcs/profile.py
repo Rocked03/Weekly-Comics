@@ -75,7 +75,6 @@ async def load_image(url: str):
             image_bytes = await response.read()
     return Image.open(BytesIO(image_bytes)).convert('RGBA')
 
-
 # import requests
 # from io import BytesIO
 #

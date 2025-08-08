@@ -1,16 +1,17 @@
+import traceback
+from typing import Optional, Literal
+
 import discord
 from discord import app_commands
 from discord.ext import commands
-from discord.ext.commands import *
-from typing import *
-
-import traceback
+from discord.ext.commands import Context, Greedy
 
 from config import ADMIN_USER_IDS, ADMIN_GUILD_IDS
 
 
 def is_owner(interaction: discord.Interaction) -> bool:
     return interaction.user.id in ADMIN_USER_IDS
+
 
 class OwnerCog(commands.Cog, name="Owner"):
     """Owner commands"""
@@ -176,7 +177,6 @@ class OwnerCog(commands.Cog, name="Owner"):
         embed.description = '\n'.join(texts)
 
         await interaction.response.send_message(embed=embed)
-
 
 
 async def setup(bot):
