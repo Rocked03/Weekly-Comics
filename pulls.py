@@ -413,7 +413,7 @@ class PullsCog(commands.Cog, name="Pulls"):
                 bot = modal_interaction.client
                 embed.set_footer(text=f"Broadcast from {bot.user.display_name}", icon_url=bot.user.display_avatar.url)
 
-                con = await self.bot.db.fetch(
+                con = await bot.db.fetch(
                     'SELECT * FROM configuration WHERE server = $1 AND brand = $2',
                     modal_interaction.guild_id, Marvel.id
                 )
@@ -421,7 +421,7 @@ class PullsCog(commands.Cog, name="Pulls"):
 
                 n = 0
                 for configuration in configurations:
-                    channel = self.bot.get_channel(configuration.channel_id)
+                    channel = bot.get_channel(configuration.channel_id)
                     if channel is None:
                         continue
                     try:
