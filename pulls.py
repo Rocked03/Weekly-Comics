@@ -22,7 +22,7 @@ from objects.configuration import Configuration, Format, config_from_record, for
     WEEKDAYS, next_scheduled
 from objects.keywords import fetch_keywords, sanitise, add_keyword, Types, delete_keyword
 from services.comic_releases import fetch_comic_releases_detailed
-from types.brand import Brand
+from comic_types.brand import Brand
 
 
 async def on_app_command_error(interaction: Interaction, error: AppCommandError):
@@ -154,7 +154,11 @@ class PullsCog(commands.Cog, name="Pulls"):
 
             print(
                 f"[Pull Feed Scheduler] ({config.server_id}, {config.brand.name}) Executing. {utils.utcnow()}")
-            await self.send_comics(config)
+            try:
+                await self.send_comics(config)
+            except KeyError:
+                print(f"[Pull Feed Scheduler] ({config.server_id}, {config.brand.name}) KeyError, "
+                      f"probably comics not fetched yet.")
 
         await self.scheduler(config)
 
@@ -623,7 +627,7 @@ class PullsCog(commands.Cog, name="Pulls"):
 
     @app_commands.command(name="formats")
     async def formats(self, interaction: Interaction):
-        """Lists the Format types available for feeds."""
+        """Lists the Format comic_types available for feeds."""
         await interaction.response.defer(ephemeral=True)
 
         embeds = []

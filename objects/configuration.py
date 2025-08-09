@@ -6,7 +6,7 @@ from asyncpg import Record, Pool
 from discord import app_commands, utils
 
 from objects.brand import Brands
-from types.brand import Brand
+from comic_types.brand import Brand
 
 WEEKDAYS = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday']
 

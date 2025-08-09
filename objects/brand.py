@@ -3,7 +3,7 @@ from typing import Dict
 
 from discord.app_commands import Choice
 
-from types.brand import Brand
+from comic_types.brand import Brand
 
 
 class BrandEnum(Enum):

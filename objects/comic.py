@@ -1,8 +1,8 @@
 from discord import Message, Embed
 
 from objects.brand import Brands
-from types.brand import Brand
-from types.logc import ComicDetails
+from comic_types.brand import Brand
+from comic_types.logc import ComicDetails
 
 
 class Comic(ComicDetails):
