@@ -9,10 +9,11 @@ from io import BytesIO
 from typing import Dict, List, Any, Union
 
 from discord import Interaction, app_commands, utils, Activity, ActivityType, Message, Forbidden, Embed, File, \
-    TextChannel, Role
+    TextChannel, Role, TextStyle
 from discord.app_commands import AppCommandError, checks
 from discord.app_commands.tree import _log
 from discord.ext import commands
+from discord.ui import Modal, TextInput
 
 from comic_types.brand import Brand
 from comic_types.locg import ComicDetails
@@ -396,38 +397,43 @@ class PullsCog(commands.Cog, name="Pulls"):
     @app_commands.command(name="broadcast")
     @app_commands.guilds(*ADMIN_GUILD_IDS or None)
     @app_commands.check(is_owner)
-    async def broadcast(self, interaction: Interaction, message: str, header: str = None):
-        """Sends a message to all servers."""
-        await interaction.response.defer()
+    async def broadcast(self, interaction: Interaction):
+        """Opens a modal to broadcast a message to all servers."""
+        class BroadcastModal(Modal, title="Broadcast Message"):
+            header = TextInput(label="Header", required=False, max_length=256)
+            message = TextInput(label="Message", style=TextStyle.paragraph, max_length=2000)
 
-        embed = Embed(
-            title=header or None,
-            description=message,
-            color=Marvel().color,
-            timestamp=utils.utcnow()
-        )
-        embed.set_footer(text=f"Broadcast from {self.bot.user.display_name}", icon_url=self.bot.user.display_avatar.url)
+            async def on_submit(self, modal_interaction: Interaction):
+                embed = Embed(
+                    title=self.header.value or None,
+                    description=self.message.value,
+                    color=Marvel().color,
+                    timestamp=utils.utcnow()
+                )
+                bot = modal_interaction.client
+                embed.set_footer(text=f"Broadcast from {bot.user.display_name}", icon_url=bot.user.display_avatar.url)
 
-        con = await self.bot.db.fetch(
-            'SELECT * FROM configuration WHERE server = $1 AND brand = $2',
-            interaction.guild_id, Marvel.id
-        )
-        configurations = [config_from_record(c) for c in con]
+                con = await self.bot.db.fetch(
+                    'SELECT * FROM configuration WHERE server = $1 AND brand = $2',
+                    modal_interaction.guild_id, Marvel.id
+                )
+                configurations = [config_from_record(c) for c in con]
 
-        n = 0
-        for configuration in configurations:
-            channel = self.bot.get_channel(configuration.channel_id)
-            if channel is None:
-                continue
+                n = 0
+                for configuration in configurations:
+                    channel = self.bot.get_channel(configuration.channel_id)
+                    if channel is None:
+                        continue
+                    try:
+                        await channel.send(embed=embed)
+                        n += 1
+                    except Forbidden:
+                        print(f"Missing permissions in {channel.guild.name} ({channel.guild.id})")
 
-            try:
-                await channel.send(embed=embed)
-                n += 1
-            except Forbidden:
-                print(f"Missing permissions in {channel.guild.name} ({channel.guild.id})")
+                await modal_interaction.response.send_message(
+                    f"Broadcasted message to {n} channels (of {len(configurations)} configured channels).")
 
-        await interaction.followup.send(
-            f"Broadcasted message to {n} channels (of {len(configurations)} configured channels).")
+        await interaction.response.send_modal(BroadcastModal())
 
     @app_commands.command(name="comics-this-week")
     @app_commands.choices(brand=BrandAutocomplete)
