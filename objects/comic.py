@@ -19,7 +19,7 @@ class Comic(ComicDetails):
 
     @property
     def pages_format(self) -> str:
-        return f"{self.pages} pages" if self.pages_format else None
+        return f"{self.pages} pages" if self.pages else None
 
     @property
     def more(self) -> str:
@@ -27,10 +27,10 @@ class Comic(ComicDetails):
 
     @property
     def brand_obj(self) -> Brand:
-        return Brands()[self.publisher]
+        return Brands().from_locg_name(self.publisher)
 
     def process_creators(self) -> dict[str, list[str]]:
-        creators = [i for i in self.creators if i.type == "comic"]
+        creators = [i for i in self.creators if i.type == "creator"]
 
         grouped_creators = {}
         for creator in creators:
@@ -44,18 +44,28 @@ class Comic(ComicDetails):
 
     def format_creators(self):
         creators = self.process_creators()
-        keys = sorted(sorted(creators.keys()), key=sorting_key)
+        keys = sorted(creators.keys(), key=sorting_key)
         text = []
         overflow = []
         for n, k in enumerate(keys):
             if n < 2 or (n == len(keys) - 1 and not overflow):
-                text.append(f"-# **{k}**\n{', '.join(creators[k])}")
+                text.append(f"-# ▸**__{k}__**\n{' · '.join(creators[k])}")
             else:
                 for name in creators[k]:
                     overflow.append(f"{name} ({k})")
         if overflow:
-            text.append(f"-# **More**\n{', '.join(overflow)}")
-        return '\n'.join(text)
+            text.append(f"-# ▸**__More__**\n{' · '.join(overflow)}")
+
+        result = []
+        total_length = 0
+        for item in text:
+            item_length = len(item) + (1 if result else 0)  # +1 for '\n' if not first item
+            if total_length + item_length > 1024:
+                break
+            result.append(item)
+            total_length += item_length
+
+        return '\n'.join(result)
 
     def to_embed(self, full_img=True):
         embed = Embed(
@@ -67,9 +77,10 @@ class Comic(ComicDetails):
             embed.add_field(name="Creators", value=self.format_creators())
         embed.add_field(name="Info",
                         value=f"{' · '.join(i for i in [self.format, self.price_format, self.pages_format] if i)}\n"
+                              f"Releases on {self.releaseDate.strftime('%d &M, %Y')}\n"
                               f"-# More details on [League of Comic Geeks]({self.url})")
 
-        embed.set_footer(text=f"{self.title}")
+        embed.set_footer(text=f"{self.format} · {self.title}")
 
         if full_img:
             embed.set_image(url=self.coverImage)
@@ -87,6 +98,7 @@ class ComicMessage(Comic):
         super().__init__(**comic.__dict__)
         self.message = message
 
+    @property
     def more(self):
         return self.message.jump_url
 

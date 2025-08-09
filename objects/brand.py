@@ -7,7 +7,7 @@ from comic_types.brand import Brand
 
 
 class BrandEnum(Enum):
-    MARVEL = 'MARVEL'
+    Marvel = 'MARVEL'
     DC = 'DC'
     DarkHorse = 'DARK_HORSE'
     IDW = 'IDW'
@@ -17,11 +17,11 @@ class BrandEnum(Enum):
 class Marvel(Brand):
     def __init__(self):
         super().__init__(
-            id=BrandEnum.MARVEL.value,
+            id=BrandEnum.Marvel.value,
             name="Marvel",
             color=0xec1d24,
             default_day=1,
-            autocomplete_choice=Choice(name='Marvel', value=BrandEnum.DC.value),
+            autocomplete_choice=Choice(name='Marvel', value=BrandEnum.Marvel.value),
             locg_id=2,
         )
 
@@ -77,11 +77,17 @@ class Image(Brand):
 class Brands:
     Marvel = Marvel()
     DC = DC()
+    DarkHorse = DarkHorse()
+    IDW = IDW()
+    Image = Image()
 
     def __init__(self):
         self.brands: Dict[str, Brand] = {
-            BrandEnum.MARVEL.value: self.Marvel,
-            BrandEnum.DC.value: self.DC
+            BrandEnum.Marvel.value: self.Marvel,
+            BrandEnum.DC.value: self.DC,
+            BrandEnum.DarkHorse.value: self.DarkHorse,
+            BrandEnum.IDW.value: self.IDW,
+            BrandEnum.Image.value: self.Image,
         }
 
     def __getitem__(self, item: str) -> Brand:
@@ -95,6 +101,21 @@ class Brands:
 
     def __iter__(self):
         return iter(self.brands.values())
+
+    def from_locg_name(self, publisher: str) -> Brand:
+        """Get brand from LOCG publisher name."""
+        if publisher == "Marvel Comics":
+            return self.Marvel
+        elif publisher == "DC Comics":
+            return self.DC
+        elif publisher == "Dark Horse Comics":
+            return self.DarkHorse
+        elif publisher == "IDW Publishing":
+            return self.IDW
+        elif publisher == "Image Comics":
+            return self.Image
+        else:
+            raise ValueError(f"Unknown LOCG publisher: {publisher}")
 
 
 BrandAutocomplete = [

@@ -256,9 +256,25 @@ class PullsCog(commands.Cog, name="Pulls"):
 
                     summary_embeds = await self.summary_embed(comics, config.brand, lead_msg)
 
-                    summ_msg = await channel.send(embeds=summary_embeds)
-                    if config.pin and _format == Format.SUMMARY:
-                        await self.pin(summ_msg)
+                    embed_selection: List[Embed] = []
+                    first_msg = None
+
+                    for embed in summary_embeds:
+                        print(summary_embeds)
+                        if sum(len(e) for e in embed_selection) + len(embed) > 6000:
+                            msg = await channel.send(embeds=embed_selection)
+                            if first_msg is None:
+                                first_msg = msg
+                            embed_selection = []
+                        embed_selection.append(embed)
+
+                    if embed_selection:
+                        msg = await channel.send(embeds=embed_selection)
+                        if first_msg is None:
+                            first_msg = msg
+
+                    if config.pin and _format == Format.SUMMARY and first_msg:
+                        await self.pin(first_msg)
 
                 else:
                     await channel.send(f"There are no {config.brand.name} comics this week.")
@@ -271,24 +287,34 @@ class PullsCog(commands.Cog, name="Pulls"):
 
         embeds = []
         embed = empty_embed.copy()
-        for n, cid in enumerate(self.order[brand.id]):
-            if not n % 20:
-                if n:
-                    embeds.append(embed.copy())
+        currently_issues = True
+        n = 0
+        for cid in self.order[brand.id]:
+            if cid not in comics:
+                continue
+
+            comic = comics[cid]
+
+            info = []
+            if comic.writer:
+                info.append(f"{comic.writer}")
+            if comic.url:
+                info.append(f"[More]({comic.more})")
+            info_text = " · ".join(info) if info else "···"
+
+            if (n == 24 or
+                    (comic.format != "Comic" and currently_issues) or
+                    len(embed) + len(comic.title) + len(info_text) > 6000):
+                embeds.append(embed.copy())
                 embed = empty_embed.copy()
+                currently_issues = comic.format == "Comic"
+                n = 0
 
-            if cid in comics:
-                c = comics[cid]
+            embed.add_field(name=comic.title,
+                            value=info_text,
+                            inline=True)
+            n += 1
 
-                info = []
-                if c.writer:
-                    info.append(f"{c.writer}")
-                if c.url:
-                    info.append(f"[More]({c.more})")
-
-                embed.add_field(name=c.title,
-                                value=" · ".join(info) if info else "···",
-                                inline=True)
         embeds.append(embed)
 
         date = week_of_date(list(comics.values()))
@@ -305,7 +331,7 @@ class PullsCog(commands.Cog, name="Pulls"):
         return embeds
 
     async def profile_pic(self):
-        m_ims = random.sample([i.coverImage for i in self.comics[BrandEnum.MARVEL.value].values() if i.coverImage], 2)
+        m_ims = random.sample([i.coverImage for i in self.comics[BrandEnum.Marvel.value].values() if i.coverImage], 2)
         d_ims = random.sample([i.coverImage for i in self.comics[BrandEnum.DC.value].values() if i.coverImage], 2)
         ims = [await load_image(i) for i in m_ims] + [await load_image(i) for i in d_ims]
 
@@ -637,7 +663,7 @@ class PullsCog(commands.Cog, name="Pulls"):
 
         embeds = []
 
-        comics = list(self.comics[BrandEnum.MARVEL.value].values())
+        comics = list(self.comics[BrandEnum.Marvel.value].values())
         samples = random.sample(comics, len(comics) if 4 > len(comics) else 4)
 
         meddle: Comic = copy.copy(random.choice(samples))
