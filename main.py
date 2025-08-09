@@ -1,7 +1,7 @@
 import discord
 from discord.ext import commands
 
-from config import *
+from config import BOT_PREFIX, TOKEN
 
 
 class Zelma(commands.Bot):
@@ -17,16 +17,15 @@ class Zelma(commands.Bot):
 
 
 intents = discord.Intents.default()
-# intents.message_content = True
 
 description = "Weekly Comics"
 bot = Zelma(
-    command_prefix=lambda bot, message: BOT_PREFIX,
+    command_prefix=commands.when_mentioned_or(BOT_PREFIX),
     description=description,
     intents=intents,
     max_messages=None)
 
-bot.recentcog = None
+bot.recent_cog = None
 
 bot.tasks = {}
 

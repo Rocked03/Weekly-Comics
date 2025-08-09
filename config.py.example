@@ -1,8 +1,7 @@
 TOKEN = "TOKEN HERE"
 BOT_PREFIX = 'PREFIX HERE'
 
-marvelKey_public = "PUBLIC KEY HERE"
-marvelKey_private = "PRIVATE KEY HERE"
+API_URL = "http://localhost:8000/api/v1"
 
 postgres_credentials = {
     "user": "USER",

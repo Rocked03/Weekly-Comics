@@ -3,33 +3,12 @@ from enum import Enum
 
 import discord
 from asyncpg import Record, Pool
-from discord import app_commands
+from discord import app_commands, utils
 
+from objects.brand import Brands
+from comic_types.brand import Brand
 
-class Brand(Enum):
-    MARVEL = "Marvel"
-    DC = "DC"
-
-
-brand_autocomplete = [
-    app_commands.Choice(name='Marvel', value='Marvel'),
-    app_commands.Choice(name='DC', value='DC')
-]
-
-brand_colours = {
-    Brand.MARVEL: 0xec1d24,
-    Brand.DC: 0x0074e8
-}
-
-brand_links = {
-    Brand.MARVEL: "Marvel.com",
-    Brand.DC: "DC.com"
-}
-
-brand_default_days = {
-    Brand.MARVEL: 1,
-    Brand.DC: 4
-}
+WEEKDAYS = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday']
 
 
 class Format(Enum):
@@ -50,7 +29,7 @@ class Configuration:
                  server_id: int,
                  channel_id: int,
                  brand: Brand, *,
-                 format: Format = Format.SUMMARY,
+                 _format: Format = Format.SUMMARY,
                  day: int = 1,
                  ping: int = None,
                  pin: bool = False,
@@ -58,7 +37,7 @@ class Configuration:
                  ):
         self.server_id = server_id
         self.channel_id = channel_id
-        self.format = format
+        self.format = _format
         self.brand = brand
         self.day = day
         self.ping = ping
@@ -67,15 +46,15 @@ class Configuration:
 
     def to_embed(self):
         embed = discord.Embed(
-            title=f"{self.brand.value} Configuration",
-            color=brand_colours[self.brand]
+            title=f"{self.brand.name} Configuration",
+            color=self.brand.color
         )
         embed.add_field(name="Channel", value=f"<#{self.channel_id}>")
         embed.add_field(name="Format", value=f"{self.format.value}")
         embed.add_field(name="Next Scheduled Day", value=f"<t:{int(next_scheduled(self.day).timestamp())}:D>")
         embed.add_field(name="Ping Role", value=f"<@&{self.ping}>" if self.ping else None)
         embed.add_field(name="Channel Pin", value="Enabled" if self.pin else "Disabled")
-        embed.set_footer(text=f"{self.server_id} · {self.brand.value}")
+        embed.set_footer(text=f"{self.server_id} · {self.brand.name}")
         return embed
 
     async def upload_to_sql(self, db: Pool):
@@ -83,7 +62,7 @@ class Configuration:
             "INSERT INTO configuration " +
             "(server, brand, format, channel, day, ping, pin, check_key) " +
             "VALUES ($1, $2, $3, $4, $5, $6, $7, $8)",
-            self.server_id, self.brand.name, self.format.name, self.channel_id, self.day, self.ping, self.pin,
+            self.server_id, self.brand.id, self.format.name, self.channel_id, self.day, self.ping, self.pin,
             self.check_keywords
         )
 
@@ -107,8 +86,8 @@ def config_from_record(record: Record):
     return Configuration(
         record['server'],
         record['channel'],
-        brand=Brand[record['brand']],
-        format=Format[record['format']],
+        brand=Brands()[record['brand']],
+        _format=Format[record['format']],
         day=record['day'],
         ping=record['ping'],
         pin=record['pin'],
@@ -117,17 +96,14 @@ def config_from_record(record: Record):
 
 
 def next_scheduled(day: int):
-    now = dt.datetime.utcnow().date()
+    now = utils.utcnow().date()
     soon = now + dt.timedelta(days=(day - now.weekday()) % 7)
-    time = dt.time(hour=1, minute=30)
+    time = dt.time(hour=0, minute=0)
     combined = dt.datetime.combine(soon, time, tzinfo=dt.timezone.utc)
-    if combined < discord.utils.utcnow():
+    if combined < utils.utcnow():
         combined += dt.timedelta(days=7)
     return combined
 
 
 def prev_scheduled(day: int):
     return next_scheduled(day) - dt.timedelta(days=7)
-
-
-weekdays = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday']

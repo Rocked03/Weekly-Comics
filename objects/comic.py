@@ -1,141 +1,116 @@
-from datetime import datetime
-from typing import Dict, List
+from discord import Message, Embed
 
-import discord as discord
-import marvel.comic as mcom
-
-from objects.configuration import brand_colours, Brand, brand_links
+from objects.brand import Brands
+from comic_types.brand import Brand
+from comic_types.locg import ComicDetails
 
 
-def alpha_surnames(names):
-    return sorted(names, key=lambda x: x.split(' ')[-1])
-
-
-class Comic:
-    def __init__(self, brand: Brand = None, id=None, title=None, description=None, creators=None, image_url=None,
-                 url=None, page_count=None, price=None, copyright=None, date=None, isVariant=False, **kwargs):
-        if creators is None:
-            creators = {}
-
-        self.brand: Brand = brand
-
-        self.id = id
-        self.title: str = title
-        self.description: str = description
-        self.creators: Dict[str, List[str]] = creators
-
-        self.image_url: str = image_url
-        self.url: str = url
-
-        self.date: datetime = date
-        self.page_count: int = page_count
-        self.price: float = price
-
-        self.isVariant: bool = isVariant
-
-        self.copyright: str = copyright
-
-    def __str__(self):
+class Comic(ComicDetails):
+    def __str__(self) -> str:
         return f"{self.title}"
 
-    def writer(self):
-        return ', '.join(alpha_surnames(self.creators['Writer'])) if 'Writer' in self.creators else None
+    @property
+    def writer(self) -> str:
+        return ', '.join(creator.name for creator in self.creators if "Writer" in creator.role)
 
-    def price_format(self):
+    @property
+    def price_format(self) -> str:
         return f"${self.price:.2f} USD" if self.price is not None else None
 
-    def pages(self):
-        return f"{self.page_count} pages" if self.page_count else None
+    @property
+    def pages_format(self) -> str:
+        return f"{self.pages} pages" if self.pages else None
 
-    def more(self):
+    @property
+    def more(self) -> str:
         return self.url
 
-    def format_creators(self, *, cover=False, compact=False):
-        keys = sorted(sorted(self.creators.keys()), key=sorting_key)
-        keys = [k for k in keys if cover or not k.endswith("(Cover)")]
-        bold_wrap = lambda role, name: f"**{name}**" if role == "Writer" else name
-        if compact:
-            keys = [k for k in keys if k in ["Writer", "Penciler", "Artist"]]
+    @property
+    def brand_obj(self) -> Brand:
+        return Brands().from_locg_name(self.publisher)
 
+    def process_creators(self) -> dict[str, list[str]]:
+        creators = [i for i in self.creators if i.type == "creator"]
+
+        grouped_creators = {}
+        for creator in creators:
+            for role in creator.role.split(', '):
+                role = role.strip()
+                if role not in grouped_creators:
+                    grouped_creators[role] = []
+                grouped_creators[role].append(creator.name)
+
+        return grouped_creators
+
+    def format_creators(self):
+        creators = self.process_creators()
+        keys = sorted(creators.keys(), key=sorting_key)
         text = []
         overflow = []
         for n, k in enumerate(keys):
             if n < 2 or (n == len(keys) - 1 and not overflow):
-                text.append(f"-# **{k}**\n{bold_wrap(k, ', '.join(alpha_surnames(self.creators[k])))}")
+                text.append(f"-# ▾**__{k}__**\n{' · '.join(creators[k])}")
             else:
-                for name in self.creators[k]:
+                for name in creators[k]:
                     overflow.append(f"{name} ({k})")
-        if overflow:
-            text.append(f"-# **More**\n{', '.join(overflow)}")
+        if overflow and self.format == "Comic":
+            text.append(f"-# ▾**__More__**\n{' · '.join(overflow)}")
 
-        return "\n".join(text)
+        result = []
+        total_length = 0
+        for item in text:
+            item_length = len(item) + (1 if result else 0)  # +1 for '\n' if not first item
+            if total_length + item_length > 1024:
+                break
+            result.append(item)
+            total_length += item_length
 
-        # return "\n".join(
-        #     f"-# **{k}**\n{bold_wrap(k, ', '.join(alpha_surnames(self.creators[k])))}"
-        #     for k in keys
-        #     if (not compact or k in ["Writer", "Penciler", "Artist"]) and (cover or not k.endswith("(Cover)"))
-        # )
+        return '\n'.join(result)
 
     def to_embed(self, full_img=True):
-        embed = discord.Embed(
+        embed = Embed(
             title=self.title,
             description=self.description,
-            color=brand_colours[self.brand])
+            color=self.brand_obj.color)
 
         if self.creators:
             embed.add_field(name="Creators", value=self.format_creators())
-        embed.add_field(name="Info",
-                        value=f"{' · '.join(i for i in [self.price_format(), self.pages()] if i)}\n"
-                              f"-# More details on [{brand_links[self.brand]}]({self.url})")
 
-        embed.set_footer(text=f"{self.title} · {self.copyright}")
+        try:
+            release_date = self.releaseDate.strftime('%-d %B, %Y')
+        except ValueError:
+            release_date = self.releaseDate.strftime('%#d %B, %Y')
+
+        embed.add_field(name="Info",
+                        value=f"{' · '.join(i for i in [self.format, self.price_format, self.pages_format] if i)}\n"
+                              f"Releases on {release_date}\n"
+                              f"-# More details on [League of Comic Geeks]({self.url})")
+
+        embed.set_footer(text=f"{self.format} · {self.title}")
 
         if full_img:
-            embed.set_image(url=self.image_url)
+            embed.set_image(url=self.coverImage)
         else:
-            embed.set_thumbnail(url=self.image_url)
+            embed.set_thumbnail(url=self.coverImage)
 
         return embed
 
-    def to_instance(self, message: discord.Message):
+    def to_instance(self, message: Message):
         return ComicMessage(self, message)
 
 
 class ComicMessage(Comic):
-    def __init__(self, comic: Comic, message: discord.Message):
+    def __init__(self, comic: Comic, message: Message):
         super().__init__(**comic.__dict__)
         self.message = message
 
+    @property
     def more(self):
         return self.message.jump_url
 
 
-def comic_obj_from_marvel(data: mcom.Comic):
-    c = Comic()
-    c.id = data.id
-    c.title = data.title
-    c.image_url = data.images[0].path + '/clean.jpg' \
-        if data.images else "https://i.annihil.us/u/prod/marvel/i/mg/b/40/image_not_available/clean.jpg"
-
-    c.page_count = data.pageCount
-    c.url = next((i['url'] for i in data.urls if i['type'] == 'detail'), None)
-    c.price = next((i.price for i in data.prices if i.type == 'printPrice'), None)
-    c.date = next((i.date for i in data.dates if i.type == 'onsaleDate'), None)
-    c.description = data.description if data.description else None
-    c.isVariant = bool(data.dict['variantDescription'])
-
-    for cr in data.creators.items:
-        role = cr.role.title()
-        if role not in c.creators:
-            c.creators[role] = [cr.name]
-        else:
-            c.creators[role].append(cr.name)
-
-    return c
-
-
 def sorting_key(person):
-    priority = ["Writer", "Artist", "Penciler", "Inker", "Colorist", "Letterer", "Editor"]
+    priority = ["Writer", "Artist", "Penciller", "Inker", "Colorist", "Letterer", "Editor"]
     try:
         return priority.index(person)
     except ValueError:
