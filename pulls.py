@@ -389,19 +389,24 @@ class PullsCog(commands.Cog, name="Pulls"):
             'SELECT * FROM configuration WHERE server = $1', server
         )
 
-    async def fetch_configs(self, server: int) -> Dict[Brand, Configuration]:
+    async def fetch_configs(self, server: int) -> Dict[str, Configuration]:
         configs: List[Configuration] = [config_from_record(i) for i in await self.fetch_raw_configs(server)]
         return {c.brand.id: c for c in configs}
 
     @app_commands.command(name="broadcast")
     @app_commands.guilds(*ADMIN_GUILD_IDS or None)
     @app_commands.check(is_owner)
-    async def broadcast(self, interaction: Interaction, message: str):
+    async def broadcast(self, interaction: Interaction, message: str, header: str = None):
         """Sends a message to all servers."""
         await interaction.response.defer()
 
-        if not message:
-            return await interaction.followup.send("You must provide a message to broadcast.")
+        embed = Embed(
+            title=header or None,
+            description=message,
+            color=Marvel().color,
+            timestamp=utils.utcnow()
+        )
+        embed.set_footer(text=f"Broadcast from {self.bot.user.display_name}", icon_url=self.bot.user.display_avatar.url)
 
         con = await self.bot.db.fetch(
             'SELECT * FROM configuration WHERE server = $1 AND brand = $2',
@@ -416,12 +421,13 @@ class PullsCog(commands.Cog, name="Pulls"):
                 continue
 
             try:
-                await channel.send(message)
+                await channel.send(embed=embed)
                 n += 1
             except Forbidden:
                 print(f"Missing permissions in {channel.guild.name} ({channel.guild.id})")
 
-        await interaction.followup.send(f"Broadcasted message to {n} channels.")
+        await interaction.followup.send(
+            f"Broadcasted message to {n} channels (of {len(configurations)} configured channels).")
 
     @app_commands.command(name="comics-this-week")
     @app_commands.choices(brand=BrandAutocomplete)
@@ -686,7 +692,7 @@ class PullsCog(commands.Cog, name="Pulls"):
 
         if b not in configs:
             return await interaction.followup.send("You have not set up a feed for this brand in this server.")
-        c = configs[b]
+        c = configs[b.id]
 
         await c.delete_from_sql(self.bot.db)
 

@@ -49,12 +49,12 @@ class Comic(ComicDetails):
         overflow = []
         for n, k in enumerate(keys):
             if n < 2 or (n == len(keys) - 1 and not overflow):
-                text.append(f"-# ▸**__{k}__**\n{' · '.join(creators[k])}")
+                text.append(f"-# ▾**__{k}__**\n{' · '.join(creators[k])}")
             else:
                 for name in creators[k]:
                     overflow.append(f"{name} ({k})")
         if overflow and self.format == "Comic":
-            text.append(f"-# ▸**__More__**\n{' · '.join(overflow)}")
+            text.append(f"-# ▾**__More__**\n{' · '.join(overflow)}")
 
         result = []
         total_length = 0
