@@ -53,7 +53,7 @@ class Comic(ComicDetails):
             else:
                 for name in creators[k]:
                     overflow.append(f"{name} ({k})")
-        if overflow:
+        if overflow and self.format == "Comic":
             text.append(f"-# ▸**__More__**\n{' · '.join(overflow)}")
 
         result = []
@@ -75,9 +75,15 @@ class Comic(ComicDetails):
 
         if self.creators:
             embed.add_field(name="Creators", value=self.format_creators())
+
+        try:
+            release_date = self.releaseDate.strftime('%-d %B, %Y')
+        except ValueError:
+            release_date = self.releaseDate.strftime('%#d %B, %Y')
+
         embed.add_field(name="Info",
                         value=f"{' · '.join(i for i in [self.format, self.price_format, self.pages_format] if i)}\n"
-                              f"Releases on {self.releaseDate.strftime('%d &M, %Y')}\n"
+                              f"Releases on {release_date}\n"
                               f"-# More details on [League of Comic Geeks]({self.url})")
 
         embed.set_footer(text=f"{self.format} · {self.title}")

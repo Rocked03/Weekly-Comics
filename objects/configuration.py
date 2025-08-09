@@ -62,7 +62,7 @@ class Configuration:
             "INSERT INTO configuration " +
             "(server, brand, format, channel, day, ping, pin, check_key) " +
             "VALUES ($1, $2, $3, $4, $5, $6, $7, $8)",
-            self.server_id, self.brand.name, self.format.name, self.channel_id, self.day, self.ping, self.pin,
+            self.server_id, self.brand.id, self.format.name, self.channel_id, self.day, self.ping, self.pin,
             self.check_keywords
         )
 

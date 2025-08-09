@@ -147,7 +147,11 @@ class PullsCog(commands.Cog, name="Pulls"):
             self.schedule_feed(config_from_record(c))
 
     def schedule_feed(self, config: Configuration):
-        self.feed_schedules[(config.server_id, config.brand.id)] = self.bot.loop.create_task(self.scheduler(config))
+        try:
+            print(config)
+            self.feed_schedules[(config.server_id, config.brand.id)] = self.bot.loop.create_task(self.scheduler(config))
+        except AttributeError:
+            print(config)
 
     async def scheduler(self, config: Configuration):
         time = next_scheduled(config.day)
@@ -212,8 +216,8 @@ class PullsCog(commands.Cog, name="Pulls"):
             comic_dict.keys(),
             key=lambda x: (
                 format_order.index(comic_dict[x].format) if comic_dict[x].format in format_order else len(format_order),
+                comic_dict[x].title,
                 comic_dict[x].releaseDate,
-                comic_dict[x].title
             )
         )
 
@@ -223,6 +227,9 @@ class PullsCog(commands.Cog, name="Pulls"):
             _format = config.format
 
             channel = self.bot.get_channel(config.channel_id)
+            if channel is None:
+                print(f"Channel {config.channel_id} not found for {config.brand.name} feed in {config.server_id}.")
+                return
 
             comics: Dict[int, Union[Comic, ComicMessage]] = self.comics[config.brand.id].copy()
 
@@ -260,7 +267,6 @@ class PullsCog(commands.Cog, name="Pulls"):
                     first_msg = None
 
                     for embed in summary_embeds:
-                        print(summary_embeds)
                         if sum(len(e) for e in embed_selection) + len(embed) > 6000:
                             msg = await channel.send(embeds=embed_selection)
                             if first_msg is None:
@@ -386,6 +392,36 @@ class PullsCog(commands.Cog, name="Pulls"):
     async def fetch_configs(self, server: int) -> Dict[Brand, Configuration]:
         configs: List[Configuration] = [config_from_record(i) for i in await self.fetch_raw_configs(server)]
         return {c.brand.id: c for c in configs}
+
+    @app_commands.command(name="broadcast")
+    @app_commands.guilds(*ADMIN_GUILD_IDS or None)
+    @app_commands.check(is_owner)
+    async def broadcast(self, interaction: Interaction, message: str):
+        """Sends a message to all servers."""
+        await interaction.response.defer()
+
+        if not message:
+            return await interaction.followup.send("You must provide a message to broadcast.")
+
+        con = await self.bot.db.fetch(
+            'SELECT * FROM configuration WHERE server = $1 AND brand = $2',
+            interaction.guild_id, Marvel.id
+        )
+        configurations = [config_from_record(c) for c in con]
+
+        n = 0
+        for configuration in configurations:
+            channel = self.bot.get_channel(configuration.channel_id)
+            if channel is None:
+                continue
+
+            try:
+                await channel.send(message)
+                n += 1
+            except Forbidden:
+                print(f"Missing permissions in {channel.guild.name} ({channel.guild.id})")
+
+        await interaction.followup.send(f"Broadcasted message to {n} channels.")
 
     @app_commands.command(name="comics-this-week")
     @app_commands.choices(brand=BrandAutocomplete)
