@@ -15,7 +15,7 @@ from discord.app_commands.tree import _log
 from discord.ext import commands
 
 from comic_types.brand import Brand
-from comic_types.logc import ComicDetails
+from comic_types.locg import ComicDetails
 from config import ADMIN_USER_IDS, ADMIN_GUILD_IDS
 from funcs.profile import load_image, Profile, imager_to_bytes
 from objects.brand import Brands, BrandEnum, BrandAutocomplete, Marvel

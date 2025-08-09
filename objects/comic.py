@@ -2,7 +2,7 @@ from discord import Message, Embed
 
 from objects.brand import Brands
 from comic_types.brand import Brand
-from comic_types.logc import ComicDetails
+from comic_types.locg import ComicDetails
 
 
 class Comic(ComicDetails):

@@ -1,5 +1,5 @@
 from typing import Optional, Any, Dict
-from comic_types.logc import ComicData, ComicDetails, ComicRequest
+from comic_types.locg import ComicData, ComicDetails, ComicRequest
 from datetime import datetime
 
 import aiohttp
