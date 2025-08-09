@@ -90,8 +90,8 @@ class OwnerCog(commands.Cog, name="Owner"):
         print(f'{cog} was reloaded.')
         print('---')
 
-    @commands.command(hidden=True, aliases=['crr'])
-    async def cog_recent_reload(self, ctx):
+    @commands.command(hidden=True, name="cog_recent_reload", aliases=['crr'])
+    async def _cog_recent_reload(self, ctx):
         """Reloads most recent reloaded cog"""
         if not self.bot.recent_cog:
             return await ctx.send("You haven't recently reloaded any cogs.")

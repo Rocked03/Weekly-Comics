@@ -14,6 +14,8 @@ from discord.app_commands import AppCommandError, checks
 from discord.app_commands.tree import _log
 from discord.ext import commands
 
+from comic_types.brand import Brand
+from comic_types.logc import ComicDetails
 from config import ADMIN_USER_IDS, ADMIN_GUILD_IDS
 from funcs.profile import load_image, Profile, imager_to_bytes
 from objects.brand import Brands, BrandEnum, BrandAutocomplete, Marvel
@@ -22,7 +24,6 @@ from objects.configuration import Configuration, Format, config_from_record, for
     WEEKDAYS, next_scheduled
 from objects.keywords import fetch_keywords, sanitise, add_keyword, Types, delete_keyword
 from services.comic_releases import fetch_comic_releases_detailed
-from comic_types.brand import Brand
 
 
 async def on_app_command_error(interaction: Interaction, error: AppCommandError):
@@ -49,6 +50,10 @@ def f_date(date: dt.date):
     return f"{date:%d %B %Y}".lstrip("0")
 
 
+def week_of_date(comics: List[ComicDetails]) -> dt.date:
+    return min(c.releaseDate for c in comics if c.format == "Comic")
+
+
 def is_owner(interaction: Interaction) -> bool:
     return interaction.user.id in ADMIN_USER_IDS
 
@@ -66,7 +71,7 @@ class PullsCog(commands.Cog, name="Pulls"):
         self.access_lock = asyncio.Lock()
         self.locks: Dict[int, asyncio.Lock] = {}
 
-        self.feed_schedules: Dict[(int, Brand), Task] = {}
+        self.feed_schedules: Dict[(int, str), Task] = {}
         self.bot.loop.create_task(self.on_startup_scheduler())
 
     def cmd_ping(self, cmd: str):
@@ -142,7 +147,7 @@ class PullsCog(commands.Cog, name="Pulls"):
             self.schedule_feed(config_from_record(c))
 
     def schedule_feed(self, config: Configuration):
-        self.feed_schedules[(config.server_id, config.brand)] = self.bot.loop.create_task(self.scheduler(config))
+        self.feed_schedules[(config.server_id, config.brand.id)] = self.bot.loop.create_task(self.scheduler(config))
 
     async def scheduler(self, config: Configuration):
         time = next_scheduled(config.day)
@@ -163,7 +168,7 @@ class PullsCog(commands.Cog, name="Pulls"):
         await self.scheduler(config)
 
     def cancel_feed(self, config: Configuration):
-        self.feed_schedules[(config.server_id, config.brand)].cancel()
+        self.feed_schedules[(config.server_id, config.brand.id)].cancel()
         print(f"[Pull Feed Scheduler] ({config.server_id}, {config.brand.name}) Cancelled.")
 
     async def pin(self, msg: Message):
@@ -188,27 +193,27 @@ class PullsCog(commands.Cog, name="Pulls"):
         self.comics = {}
         self.order = {}
 
-        for current_brand in BrandEnum:
-            brand_obj = self.brands[current_brand.value]
-            print(f" > Fetching {brand_obj.name}")
-            self.comics[current_brand] = await fetch_comic_releases_detailed(publisher=brand_obj.locg_id)
-            self.sort_order(brand_obj)
+        for current_brand in self.brands:
+            print(f" > Fetching {current_brand.name}")
+            comics = await fetch_comic_releases_detailed(publisher=current_brand.locg_id)
+            comic_dict = {comic.id: comic for comic in comics}
+            self.comics[current_brand.id] = comic_dict
+            self.sort_order(comic_dict, current_brand)
+            date = week_of_date(comics)
             print(
-                f"   > {len(self.comics[current_brand.value])} loaded, "
-                f"filtered to {len(self.order[current_brand.value])}")
+                f"   > {len(self.comics[current_brand.id])} loaded for the week of {f_date(date)} ")
 
         print(f"~~ Comics fetched ~~   {utils.utcnow()}")
 
-    def sort_order(self, brand: Brand):
-        comics = self.comics[brand.id]
+    def sort_order(self, comic_dict: Dict[int, ComicDetails], brand: Brand):
         format_order = ["Comic", "Trade Paperback", "Hardcover"]
 
         self.order[brand.id] = sorted(
-            comics.keys(),
+            comic_dict.keys(),
             key=lambda x: (
-                format_order.index(comics[x].format) if comics[x].format in format_order else 100,
-                comics[x].releaseDate,
-                comics[x].title.lower()
+                format_order.index(comic_dict[x].format) if comic_dict[x].format in format_order else len(format_order),
+                comic_dict[x].releaseDate,
+                comic_dict[x].title
             )
         )
 
@@ -229,7 +234,7 @@ class PullsCog(commands.Cog, name="Pulls"):
                 if comics:
                     lead_msg = None
                     if _format in [Format.FULL, Format.COMPACT]:
-                        date = min(c.releaseDate for c in comics.values() if c.format == "Comic")
+                        date = week_of_date(list(comics.values()))
                         lead_msg = await channel.send(f"## {config.brand.name} Comics - {f_date(date)}")
                         if config.pin:
                             await self.pin(lead_msg)
@@ -286,7 +291,7 @@ class PullsCog(commands.Cog, name="Pulls"):
                                 inline=True)
         embeds.append(embed)
 
-        date = min(c.releaseDate for c in comics.values() if c.format == "Comic")
+        date = week_of_date(list(comics.values()))
         embeds[0].title = f"{brand.name} Comics Releases Summary - {f_date(date)}"
 
         embed = empty_embed.copy()
@@ -416,11 +421,11 @@ class PullsCog(commands.Cog, name="Pulls"):
     @app_commands.describe(
         brand="The comic brand to receive a feed from.",
         channel="Channel to set up the feed. Leave empty to set up in THIS channel.",
-        format="Feed format. Use /formats to view options. Summary is default."
+        _format="Feed format. Use /formats to view options. Summary is default."
     )
     @app_commands.choices(
         brand=BrandAutocomplete,
-        format=format_autocomplete
+        _format=format_autocomplete
     )
     async def setup(self, interaction: Interaction, brand: str, channel: TextChannel = None,
                     _format: str = "Summary"):
@@ -489,12 +494,12 @@ class PullsCog(commands.Cog, name="Pulls"):
     @edit_group.command(name="format")
     @checks.has_permissions(manage_guild=True)
     @app_commands.describe(
-        format="Feed format. Use /formats to view options.",
+        _format="Feed format. Use /formats to view options.",
         brand="The brand feed to set. Leave empty to edit all feed configurations."
     )
     @app_commands.choices(
         brand=BrandAutocomplete,
-        format=format_autocomplete
+        _format=format_autocomplete
     )
     async def config_format(self, interaction: Interaction, _format: str, brand: str = None):
         """Sets the format type of the feed."""

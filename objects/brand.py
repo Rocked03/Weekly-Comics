@@ -14,29 +14,6 @@ class BrandEnum(Enum):
     Image = 'IMAGE'
 
 
-class Brands:
-    Marvel = Marvel()
-    DC = DC()
-
-    def __init__(self):
-        self.brands: Dict[str, Brand] = {
-            BrandEnum.MARVEL.value: self.Marvel,
-            BrandEnum.DC.value: self.DC
-        }
-
-    def __getitem__(self, item: str) -> Brand:
-        return self.brands.get(item, None)
-
-    def __values__(self):
-        return self.brands.values()
-
-    def __contains__(self, item: str) -> bool:
-        return item in self.brands.keys()
-
-    def __iter__(self):
-        return iter(self.brands.values())
-
-
 class Marvel(Brand):
     def __init__(self):
         super().__init__(
@@ -95,6 +72,29 @@ class Image(Brand):
             autocomplete_choice=Choice(name='Image', value=BrandEnum.Image.value),
             locg_id=7,
         )
+
+
+class Brands:
+    Marvel = Marvel()
+    DC = DC()
+
+    def __init__(self):
+        self.brands: Dict[str, Brand] = {
+            BrandEnum.MARVEL.value: self.Marvel,
+            BrandEnum.DC.value: self.DC
+        }
+
+    def __getitem__(self, item: str) -> Brand:
+        return self.brands.get(item, None)
+
+    def __values__(self):
+        return self.brands.values()
+
+    def __contains__(self, item: str) -> bool:
+        return item in self.brands.keys()
+
+    def __iter__(self):
+        return iter(self.brands.values())
 
 
 BrandAutocomplete = [

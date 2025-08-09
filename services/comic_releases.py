@@ -21,12 +21,12 @@ async def fetch_comic_releases(
     Fetches the latest comic releases from League of Comic Geeks API.
     """
     params: Dict[str, Any] = {
-        "issue": issue,
-        "annual": annual,
-        "digital": digital,
-        "variant": variant,
-        "trade": trade,
-        "hardcover": hardcover,
+        "issue": str(issue),
+        "annual": str(annual),
+        "digital": str(digital),
+        "variant": str(variant),
+        "trade": str(trade),
+        "hardcover": str(hardcover),
     }
     if date:
         params["date"] = date
