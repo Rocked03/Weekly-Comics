@@ -404,6 +404,8 @@ class PullsCog(commands.Cog, name="Pulls"):
             message = TextInput(label="Message", style=TextStyle.paragraph, max_length=2000)
 
             async def on_submit(self, modal_interaction: Interaction):
+                await modal_interaction.response.defer()
+
                 embed = Embed(
                     title=self.header.value or None,
                     description=self.message.value,
@@ -427,7 +429,7 @@ class PullsCog(commands.Cog, name="Pulls"):
                     except Forbidden:
                         print(f"Missing permissions in {channel.guild.name} ({channel.guild.id})")
 
-                await modal_interaction.response.send_message(
+                await modal_interaction.followup.send(
                     f"Broadcasted message to {n} channels (of {len(configurations)} configured channels).")
 
         await interaction.response.send_modal(BroadcastModal())
