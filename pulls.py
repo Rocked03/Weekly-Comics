@@ -417,10 +417,11 @@ class PullsCog(commands.Cog, name="Pulls"):
 
                 con = await bot.db.fetch('SELECT * FROM configuration')
                 configurations = [config_from_record(c) for c in con]
+                channels = set(c.channel_id for c in configurations)
 
                 n = 0
-                for configuration in configurations:
-                    channel = bot.get_channel(configuration.channel_id)
+                for channel_id in channels:
+                    channel = bot.get_channel(channel_id)
                     if channel is None:
                         continue
                     try:
