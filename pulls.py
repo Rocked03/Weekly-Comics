@@ -101,7 +101,7 @@ class PullsCog(commands.Cog, name="Pulls"):
 
             now = utils.utcnow()
             time = dt.datetime.combine(now, dt.time(0), tzinfo=dt.timezone.utc)
-            time += dt.timedelta(hours=1, minutes=15)
+            time -= dt.timedelta(minutes=15)
             sleep_duration = time - utils.utcnow()
             while sleep_duration.total_seconds() <= 0:
                 sleep_duration += dt.timedelta(days=1)
@@ -116,7 +116,7 @@ class PullsCog(commands.Cog, name="Pulls"):
         while not self.bot.is_closed():
             now = utils.utcnow()
             time = dt.datetime.combine(now, dt.time(0), tzinfo=dt.timezone.utc)
-            time -= dt.timedelta(minutes=15)
+            time -= dt.timedelta(minutes=10)
             sleep_duration = time - utils.utcnow()
             if sleep_duration.total_seconds() <= 0:
                 sleep_duration += dt.timedelta(days=1)
@@ -385,7 +385,7 @@ class PullsCog(commands.Cog, name="Pulls"):
 
     async def fetch_configs(self, server: int) -> Dict[Brand, Configuration]:
         configs: List[Configuration] = [config_from_record(i) for i in await self.fetch_raw_configs(server)]
-        return {c.brand: c for c in configs}
+        return {c.brand.id: c for c in configs}
 
     @app_commands.command(name="comics-this-week")
     @app_commands.choices(brand=BrandAutocomplete)
@@ -449,6 +449,7 @@ class PullsCog(commands.Cog, name="Pulls"):
         channel="Channel to set up the feed. Leave empty to set up in THIS channel.",
         _format="Feed format. Use /formats to view options. Summary is default."
     )
+    @app_commands.rename(_format="format")
     @app_commands.choices(
         brand=BrandAutocomplete,
         _format=format_autocomplete
@@ -465,7 +466,7 @@ class PullsCog(commands.Cog, name="Pulls"):
         if channel is None:
             channel = interaction.channel
 
-        if b in configs:
+        if b.id in configs:
             return await interaction.followup.send("You have already set up a feed for this brand in this server.")
 
         new_config = Configuration(
@@ -523,6 +524,7 @@ class PullsCog(commands.Cog, name="Pulls"):
         _format="Feed format. Use /formats to view options.",
         brand="The brand feed to set. Leave empty to edit all feed configurations."
     )
+    @app_commands.rename(_format="format")
     @app_commands.choices(
         brand=BrandAutocomplete,
         _format=format_autocomplete

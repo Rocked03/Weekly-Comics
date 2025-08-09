@@ -98,7 +98,7 @@ def config_from_record(record: Record):
 def next_scheduled(day: int):
     now = utils.utcnow().date()
     soon = now + dt.timedelta(days=(day - now.weekday()) % 7)
-    time = dt.time(hour=1, minute=30)
+    time = dt.time(hour=0, minute=0)
     combined = dt.datetime.combine(soon, time, tzinfo=dt.timezone.utc)
     if combined < utils.utcnow():
         combined += dt.timedelta(days=7)
