@@ -413,10 +413,7 @@ class PullsCog(commands.Cog, name="Pulls"):
                 bot = modal_interaction.client
                 embed.set_footer(text=f"Broadcast from {bot.user.display_name}", icon_url=bot.user.display_avatar.url)
 
-                con = await bot.db.fetch(
-                    'SELECT * FROM configuration WHERE server = $1 AND brand = $2',
-                    modal_interaction.guild_id, Marvel.id
-                )
+                con = await bot.db.fetch('SELECT * FROM configuration')
                 configurations = [config_from_record(c) for c in con]
 
                 n = 0
