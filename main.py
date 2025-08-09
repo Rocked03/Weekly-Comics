@@ -20,7 +20,7 @@ intents = discord.Intents.default()
 
 description = "Weekly Comics"
 bot = Zelma(
-    command_prefix=lambda _bot, message: BOT_PREFIX,
+    command_prefix=commands.when_mentioned_or(BOT_PREFIX),
     description=description,
     intents=intents,
     max_messages=None)

@@ -5,6 +5,8 @@ from datetime import datetime
 import aiohttp
 
 from config import API_URL
+from funcs.utils import from_dict
+from objects.comic import Comic
 
 
 async def fetch_comic_releases(
@@ -75,7 +77,7 @@ async def fetch_comic_releases_detailed(
     trade: bool = True,
     hardcover: bool = True,
     publisher: Optional[int] = None
-) -> list[ComicDetails]:
+) -> list[Comic]:
     """
     Fetches comic releases, then fetches detailed info for all releases and returns the ComicDetails list.
     """
@@ -89,8 +91,11 @@ async def fetch_comic_releases_detailed(
         hardcover=hardcover,
         publisher=publisher
     )
-    return await fetch_comic_details([ComicRequest(
+    details = await fetch_comic_details([
+        ComicRequest(
             comicId=comic.id,
             title=comic.titlePath,
             variantId=comic.variantId
-        ) for comic in releases])
+        ) for comic in releases
+    ])
+    return [Comic(**from_dict(ComicDetails, detail.__dict__).__dict__) for detail in details]

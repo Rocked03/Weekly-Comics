@@ -18,8 +18,8 @@ class Comic(ComicDetails):
         return f"${self.price:.2f} USD" if self.price is not None else None
 
     @property
-    def pages(self) -> str:
-        return f"{self.pages} pages" if self.pages else None
+    def pages_format(self) -> str:
+        return f"{self.pages} pages" if self.pages_format else None
 
     @property
     def more(self) -> str:
@@ -66,7 +66,7 @@ class Comic(ComicDetails):
         if self.creators:
             embed.add_field(name="Creators", value=self.format_creators())
         embed.add_field(name="Info",
-                        value=f"{' · '.join(i for i in [self.format, self.price_format, self.pages] if i)}\n"
+                        value=f"{' · '.join(i for i in [self.format, self.price_format, self.pages_format] if i)}\n"
                               f"-# More details on [League of Comic Geeks]({self.url})")
 
         embed.set_footer(text=f"{self.title}")
