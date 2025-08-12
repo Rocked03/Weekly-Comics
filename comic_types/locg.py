@@ -15,8 +15,8 @@ class ComicData:
     pulls: int
     community: int
     titlePath: str
-    variantId: Optional[str] = None
-    parentId: Optional[str] = None
+    variantId: Optional[int] = None
+    parentId: Optional[int] = None
     variantName: Optional[str] = None
 
 
