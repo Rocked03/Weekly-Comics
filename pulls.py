@@ -257,8 +257,11 @@ class PullsCog(commands.Cog, name="Pulls"):
 
                         for cid in self.order[config.brand.id]:
                             if cid in comics:
-                                msg = await channel.send(embed=embeds[cid])
-                                instances[cid] = comics[cid].to_instance(msg)
+                                try:
+                                    msg = await channel.send(embed=embeds[cid])
+                                    instances[cid] = comics[cid].to_instance(msg)
+                                except Exception:
+                                    pass
 
                         comics = instances
 

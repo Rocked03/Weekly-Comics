@@ -88,10 +88,11 @@ class Comic(ComicDetails):
 
         embed.set_footer(text=f"{self.format} · {self.title}")
 
-        if full_img:
-            embed.set_image(url=self.coverImage)
-        else:
-            embed.set_thumbnail(url=self.coverImage)
+        if self.coverImage.startswith("http"):
+            if full_img:
+                embed.set_image(url=self.coverImage)
+            else:
+                embed.set_thumbnail(url=self.coverImage)
 
         return embed
 
