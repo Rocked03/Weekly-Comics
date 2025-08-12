@@ -93,7 +93,7 @@ async def fetch_comic_releases_detailed(
     )
     details = await fetch_comic_details([
         ComicRequest(
-            comicId=comic.id,
+            comicId=comic.parentId if comic.parentId else comic.id,
             title=comic.titlePath,
             variantId=comic.variantId
         ) for comic in releases

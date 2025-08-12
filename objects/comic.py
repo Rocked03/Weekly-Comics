@@ -29,6 +29,10 @@ class Comic(ComicDetails):
     def brand_obj(self) -> Brand:
         return Brands().from_locg_name(self.publisher)
 
+    @property
+    def full_title(self) -> str:
+        return f"{self.title}{self.variants}"
+
     def process_creators(self) -> dict[str, list[str]]:
         creators = [i for i in self.creators if i.type == "creator"]
 
