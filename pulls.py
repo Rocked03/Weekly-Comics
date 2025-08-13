@@ -154,10 +154,9 @@ class PullsCog(commands.Cog, name="Pulls"):
 
     def schedule_feed(self, config: Configuration):
         try:
-            print(config)
             self.feed_schedules[(config.server_id, config.brand.id)] = self.bot.loop.create_task(self.scheduler(config))
         except AttributeError:
-            print(config)
+            pass
 
     async def scheduler(self, config: Configuration):
         time = next_scheduled(config.day)
