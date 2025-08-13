@@ -123,7 +123,12 @@ class PullsCog(commands.Cog, name="Pulls"):
                 sleep_duration += dt.timedelta(days=1)
             await asyncio.sleep(sleep_duration.total_seconds())
 
-            await self.profile_pic()
+            try:
+                await self.profile_pic()
+            except Exception as e:
+                print(f"Error while updating profile picture: {e}")
+                traceback.print_exc()
+                return None
 
     async def schedule_activity(self):
         while not self.comics:
