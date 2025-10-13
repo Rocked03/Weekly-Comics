@@ -1,0 +1,8 @@
+.dockerignore to exclude unnecessary files from Docker build context
+
+__pycache__/
+*.pyc
+.env
+*.png
+*.md
+.git
