@@ -676,7 +676,7 @@ class PullsCog(commands.Cog, name="Pulls"):
             await interaction.followup.send(
                 "You have not set up any feeds yet in this server! Use /setup to set one up!")
             return None
-        filtered = sorted([v for k, v in configs.items() if b is None or k == b], key=lambda x: x.brand.value)
+        filtered = sorted([v for k, v in configs.items() if b is None or k == b.id], key=lambda x: x.brand.id)
         if not filtered:
             await interaction.followup.send(f"You have not set up a `{b.name}` feed yet in this server!")
             return None
@@ -703,7 +703,7 @@ class PullsCog(commands.Cog, name="Pulls"):
         b = self.brands[brand]
         configs = await self.fetch_configs(interaction.guild_id)
 
-        if b not in configs:
+        if b.id not in configs:
             return await interaction.followup.send("You have not set up a feed for this brand in this server.")
         c = configs[b.id]
 
@@ -774,7 +774,7 @@ class PullsCog(commands.Cog, name="Pulls"):
                     value=', '.join(f'`{i}`' for i in kw.keys) if kw.keys else "None")
         e.add_field(name="Creators", value=', '.join(f'`{i}`' for i in kw.creators) if kw.creators else "None")
         e.add_field(name="Feeds with keywords enabled",
-                    value=', '.join(f'{c.brand.value} (<#{c.channel_id}>)' for c in
+                    value=', '.join(f'{c.brand.id} (<#{c.channel_id}>)' for c in
                                     configs) + f'\nEnable keywords with {self.cmd_ping("editfeed check-keywords")}',
                     inline=False)
 
@@ -850,7 +850,7 @@ class PullsCog(commands.Cog, name="Pulls"):
     @app_commands.command(name="about")
     async def about(self, interaction: Interaction):
         """Information about this bot."""
-        embed = Embed(title="About", color=Marvel.color)
+        embed = Embed(title="About", color=Marvel().color)
         embed.description = \
             "This bot was developed by **Rocked03#3304**. Originally created for the *Marvel Discord* " \
             "(https://discord.gg/Marvel), this bot was later expanded for public use with *Marvel* and *DC* feeds " \
@@ -865,7 +865,7 @@ class PullsCog(commands.Cog, name="Pulls"):
     @app_commands.command(name="invite")
     async def invite(self, interaction: Interaction):
         """Invite this bot to your own server."""
-        embed = Embed(title="Invite me!", color=Marvel.color)
+        embed = Embed(title="Invite me!", color=Marvel().color)
         embed.description = \
             "**Add this bot** to your own server: " \
             f"https://discordapp.com/oauth2/authorize?client_id={self.bot.user.id}&scope=bot&permissions={'18432'}"
