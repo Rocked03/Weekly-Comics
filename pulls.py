@@ -720,7 +720,7 @@ class PullsCog(commands.Cog, name="Pulls"):
 
         embeds = []
 
-        comics = list(self.comics[BrandEnum.Marvel.value].values())
+        comics = list(self.comics[BrandEnum.Marvel.id].values())
         samples = random.sample(comics, len(comics) if 4 > len(comics) else 4)
 
         meddle: Comic = copy.copy(random.choice(samples))

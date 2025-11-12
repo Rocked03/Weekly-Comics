@@ -71,7 +71,7 @@ class Configuration:
             "UPDATE configuration " +
             "SET format = $3, channel = $4, day = $5, ping = $6, pin = $7, check_key = $8 " +
             "WHERE (server = $1 AND brand = $2)",
-            self.server_id, self.brand.name,
+            self.server_id, self.brand.id,
             self.format.name, self.channel_id, self.day, self.ping, self.pin, self.check_keywords
         )
 
