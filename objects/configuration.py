@@ -78,7 +78,7 @@ class Configuration:
     async def delete_from_sql(self, db: Pool):
         await db.execute(
             "DELETE FROM configuration WHERE server = $1 AND brand = $2",
-            self.server_id, self.brand.name
+            self.server_id, self.brand.id
         )
 
 
