@@ -181,6 +181,7 @@ class PullsCog(commands.Cog, name="Pulls"):
         print(f"[Pull Feed Scheduler] ({config.server_id}, {config.brand.name}) Cancelled.")
 
     async def pin(self, msg: Message):
+        if msg.guild.id == 281648235557421056: print("pin start")
         try:
             pins = list(reversed(await msg.channel.pins()))
             if len(pins) >= 50:
@@ -190,9 +191,12 @@ class PullsCog(commands.Cog, name="Pulls"):
                 except StopIteration:
                     return None
             await msg.pin()
+            if msg.guild.id == 281648235557421056: print("pinned")
 
             async for m in msg.channel.history(limit=1):
                 await m.delete()
+
+            if msg.guild.id == 281648235557421056: print("deleted pin message")
 
         except Forbidden:
             pass
@@ -250,6 +254,7 @@ class PullsCog(commands.Cog, name="Pulls"):
                         lead_msg = await channel.send(f"## {config.brand.name} Comics - {f_date(date)}")
                         if config.pin:
                             await self.pin(lead_msg)
+                        if channel.guild.id == 281648235557421056: print("finished pin")
 
                     if config.ping:
                         await channel.send(f"<@&{config.ping}>")
