@@ -208,13 +208,17 @@ class PullsCog(commands.Cog, name="Pulls"):
 
         for current_brand in self.brands:
             print(f" > Fetching {current_brand.name}")
-            comics = await fetch_comic_releases_detailed(publisher=current_brand.locg_id)
-            comic_dict = {comic.id: comic for comic in comics}
-            self.comics[current_brand.id] = comic_dict
-            self.sort_order(comic_dict, current_brand)
-            date = week_of_date(comics)
-            print(
-                f"   > {len(self.comics[current_brand.id])} loaded for the week of {f_date(date)} ")
+            try:
+                comics = await fetch_comic_releases_detailed(publisher=current_brand.locg_id)
+                comic_dict = {comic.id: comic for comic in comics}
+                self.comics[current_brand.id] = comic_dict
+                self.sort_order(comic_dict, current_brand)
+                date = week_of_date(comics)
+                print(
+                    f"   > {len(self.comics[current_brand.id])} loaded for the week of {f_date(date)} ")
+            except Exception as e:
+                print(f"   ! Error fetching {current_brand.name} comics: {e}")
+                traceback.print_exc()
 
         print(f"~~ Comics fetched ~~   {utils.utcnow()}")
 
