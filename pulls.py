@@ -9,7 +9,7 @@ from io import BytesIO
 from typing import Dict, List, Any, Union
 
 from discord import Interaction, app_commands, utils, Activity, ActivityType, Message, Forbidden, Embed, File, \
-    TextChannel, Role, TextStyle
+    TextChannel, Role, TextStyle, RateLimited
 from discord.app_commands import AppCommandError, checks
 from discord.app_commands.tree import _log
 from discord.ext import commands
@@ -198,7 +198,7 @@ class PullsCog(commands.Cog, name="Pulls"):
 
             if msg.guild.id == 281648235557421056: print("deleted pin message")
 
-        except Forbidden:
+        except Forbidden or RateLimited:
             pass
 
     async def fetch_comics(self):
