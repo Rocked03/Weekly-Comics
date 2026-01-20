@@ -198,7 +198,7 @@ class PullsCog(commands.Cog, name="Pulls"):
 
             if msg.guild.id == 281648235557421056: print("deleted pin message")
 
-        except Forbidden or RateLimited or HTTPException:
+        except (Forbidden, RateLimited, HTTPException):
             pass
 
     async def fetch_comics(self):
