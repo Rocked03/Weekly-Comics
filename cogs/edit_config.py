@@ -34,7 +34,6 @@ class EditConfigCog(commands.Cog, name="Edit Configuration"):
 
         return await interaction.followup.send(embeds=[i.to_embed() for i in configs.values()])
 
-
     @edit_group.command(name="channel")
     @checks.has_permissions(manage_guild=True)
     @app_commands.describe(

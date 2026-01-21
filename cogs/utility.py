@@ -1,10 +1,11 @@
 import copy
 import random
 
-from discord import app_commands, Interaction, TextStyle, Forbidden, Embed
+from discord import app_commands, Interaction, TextStyle, Forbidden, Embed, utils
 from discord.ext import commands
 from discord.ui import TextInput, Modal
 
+from comic_types.locg import Creator
 from config import ADMIN_GUILD_IDS
 from funcs.discord_functions import cmd_ping
 from funcs.pull_functions import summary_embed
@@ -103,7 +104,10 @@ class UtilityCog(commands.Cog, name="Utility"):
         samples = random.sample(comics, len(comics) if 4 > len(comics) else 4)
 
         meddle: Comic = copy.copy(random.choice(samples))
-        meddle.creators = {"Writer": ["Rocked03"], "Artist": ["Rocked03"]}
+        meddle.creators = [
+            Creator(name="Rocked03", role="Writer", url="https://marvelcord.com", type="creator"),
+            Creator(name="Rocked03", role="Artist", url="https://marvelcord.com", type="creator")
+        ]
         meddle.price = 99.99
         meddle.page_count = 99
         meddle.copyright = "This isn't a real comic (aside from the cover and links)."
