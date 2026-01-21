@@ -9,54 +9,24 @@ from io import BytesIO
 from typing import Dict, List, Any, Union, Tuple
 
 from discord import Interaction, app_commands, utils, Activity, ActivityType, Message, Forbidden, Embed, File, \
-    TextChannel, Role, TextStyle, RateLimited, HTTPException
-from discord.app_commands import AppCommandError, checks
-from discord.app_commands.tree import _log
+    TextChannel, Role, RateLimited, HTTPException
+from discord.app_commands import checks
 from discord.ext import commands
-from discord.ui import Modal, TextInput
 
 from comic_types.brand import Brand
 from comic_types.locg import ComicDetails
-from config import ADMIN_USER_IDS, ADMIN_GUILD_IDS
+from config import ADMIN_GUILD_IDS
 from funcs.profile import load_image, Profile, imager_to_bytes
+from funcs.utils import f_date, week_of_date, is_owner
+from funcs.discord_functions import on_app_command_error, cmd_ping, pin, profile_pic
+from funcs.pull_functions import validate_config_accessibility, summary_embed
+from funcs.postgresql import fetch_configs
 from objects.brand import Brands, BrandEnum, BrandAutocomplete, Marvel
 from objects.comic import Comic, ComicMessage
 from objects.configuration import Configuration, Format, config_from_record, format_autocomplete, \
     WEEKDAYS, next_scheduled
 from objects.keywords import fetch_keywords, sanitise, add_keyword, Types, delete_keyword
 from services.comic_releases import fetch_comic_releases_detailed
-
-
-async def on_app_command_error(interaction: Interaction, error: AppCommandError):
-    if isinstance(error, app_commands.errors.CheckFailure):
-        return await interaction.response.send_message(f"You need Manage Server permissions to use this command!",
-                                                       ephemeral=True)
-
-    await interaction.followup.send("Something broke!")
-    _log.error('Ignoring exception in command %r', interaction.command.name, exc_info=error)
-
-
-async def check_brand(brand: str, interaction: Interaction = None):
-    brands = Brands()
-    if brand is None:
-        return None
-    if brand not in brands:
-        if interaction:
-            await interaction.followup.send("That is not a valid brand.")
-        return False
-    return brands[brand]
-
-
-def f_date(date: dt.date):
-    return f"{date:%d %B %Y}".lstrip("0")
-
-
-def week_of_date(comics: List[ComicDetails]) -> dt.date:
-    return min(c.releaseDate for c in comics if c.format == "Comic") if comics else dt.date.today()
-
-
-def is_owner(interaction: Interaction) -> bool:
-    return interaction.user.id in ADMIN_USER_IDS
 
 
 class PullsCog(commands.Cog, name="Pulls"):
@@ -76,10 +46,6 @@ class PullsCog(commands.Cog, name="Pulls"):
 
         self.feed_schedules: Dict[(int, str), Task] = {}
         self.bot.loop.create_task(self.on_startup_scheduler())
-
-    def cmd_ping(self, cmd: str):
-        first = cmd.split(' ')[0]
-        return f"</{cmd}:{self.bot.cmds[first].id}>"
 
     async def check_lock(self, id_: int):
         async with self.access_lock:
@@ -126,7 +92,10 @@ class PullsCog(commands.Cog, name="Pulls"):
             await asyncio.sleep(sleep_duration.total_seconds())
 
             try:
-                await self.profile_pic()
+                await profile_pic(
+                    list(self.comics[BrandEnum.Marvel.value].values()),
+                    list(self.comics[BrandEnum.DC.value].values()),
+                    self.bot)
             except Exception as e:
                 print(f"Error while updating profile picture: {e}")
                 traceback.print_exc()
@@ -148,29 +117,6 @@ class PullsCog(commands.Cog, name="Pulls"):
 
             await asyncio.sleep(random.randint(600, 3000))
 
-    async def validate_config_accessibility(self, config: Configuration) -> Tuple[bool, str]:
-        """
-        Check if the bot can access and send messages to a configuration's channel.
-
-        Returns:
-            Tuple of (is_accessible, reason_if_not)
-        """
-        guild = self.bot.get_guild(config.server_id)
-        if guild is None:
-            return False, "Guild not found"
-
-        channel = self.bot.get_channel(config.channel_id)
-        if channel is None:
-            return False, "Channel not found"
-
-        perms = channel.permissions_for(guild.me)
-        if not perms.send_messages:
-            return False, "Missing permission: Send Messages"
-        if not perms.embed_links:
-            return False, "Missing permission: Embed Links"
-
-        return True, ""
-
     async def schedule_feeds(self):
         configs = await self.bot.db.fetch('SELECT * FROM configuration')
         all_configs = [config_from_record(c) for c in configs]
@@ -182,7 +128,7 @@ class PullsCog(commands.Cog, name="Pulls"):
         inaccessible_configs = []
 
         for config in all_configs:
-            is_accessible, reason = await self.validate_config_accessibility(config)
+            is_accessible, reason = await validate_config_accessibility(self.bot, config)
             if is_accessible:
                 valid_configs.append(config)
             else:
@@ -289,27 +235,6 @@ class PullsCog(commands.Cog, name="Pulls"):
         self.feed_schedules[(config.server_id, config.brand.id)].cancel()
         print(f"[Pull Feed Scheduler] ({config.server_id}, {config.brand.name}) Cancelled.")
 
-    async def pin(self, msg: Message):
-        if msg.guild.id == 281648235557421056: print("pin start")
-        try:
-            pins = list(reversed(await msg.channel.pins()))
-            if len(pins) >= 50:
-                try:
-                    p = next(i for i in pins if i.author.id == self.bot.user.id)
-                    await p.unpin()
-                except StopIteration:
-                    return None
-            await msg.pin()
-            if msg.guild.id == 281648235557421056: print("pinned")
-
-            async for m in msg.channel.history(limit=1):
-                await m.delete()
-
-            if msg.guild.id == 281648235557421056: print("deleted pin message")
-
-        except (Forbidden, RateLimited, HTTPException):
-            pass
-
     async def fetch_comics(self):
         print(f"~~ Fetching comics ~~   {utils.utcnow()}")
         self.comics = {}
@@ -366,7 +291,7 @@ class PullsCog(commands.Cog, name="Pulls"):
                         date = week_of_date(list(comics.values()))
                         lead_msg = await channel.send(f"## {config.brand.name} Comics - {f_date(date)}")
                         if config.pin:
-                            await self.pin(lead_msg)
+                            await pin(self.bot.user.id, lead_msg)
                         if channel.guild.id == 281648235557421056: print("finished pin")
 
                     if config.ping:
@@ -387,7 +312,7 @@ class PullsCog(commands.Cog, name="Pulls"):
 
                         comics = instances
 
-                    summary_embeds = await self.summary_embed(comics, config.brand, lead_msg)
+                    summary_embeds = await summary_embed(self.order, comics, config.brand, lead_msg)
 
                     embed_selection: List[Embed] = []
                     first_msg = None
@@ -406,76 +331,12 @@ class PullsCog(commands.Cog, name="Pulls"):
                             first_msg = msg
 
                     if config.pin and _format == Format.SUMMARY and first_msg:
-                        await self.pin(first_msg)
+                        await pin(self.bot.user.id, lead_msg)
 
                 else:
                     await channel.send(f"There are no {config.brand.name} comics this week.")
             except Forbidden:
                 print(f"Missing permissions in {channel.guild.name} ({channel.guild.id})")
-
-    async def summary_embed(self, comics: Dict[int, Union[Comic, ComicMessage]], brand: Brand,
-                            start: Message = None):
-        empty_embed = Embed(color=brand.color)
-
-        embeds = []
-        embed = empty_embed.copy()
-        currently_issues = True
-        n = 0
-        for cid in self.order[brand.id]:
-            if cid not in comics:
-                continue
-
-            comic = comics[cid]
-
-            info = []
-            if comic.writer:
-                info.append(f"{comic.writer}")
-            if comic.url:
-                info.append(f"[More]({comic.more})")
-            info_text = " · ".join(info) if info else "···"
-
-            if (n == 24 or
-                    (comic.format != "Comic" and currently_issues) or
-                    len(embed) + len(comic.title) + len(info_text) > 6000):
-                embeds.append(embed.copy())
-                embed = empty_embed.copy()
-                currently_issues = comic.format == "Comic"
-                n = 0
-
-            embed.add_field(name=comic.title,
-                            value=info_text,
-                            inline=True)
-            n += 1
-
-        embeds.append(embed)
-
-        date = week_of_date(list(comics.values()))
-        embeds[0].title = f"{brand.name} Comics Releases Summary - {f_date(date)}"
-
-        embed = empty_embed.copy()
-        description = []
-        if start:
-            description.append(f"*Jump to the [beginning]({start.jump_url}).*")
-        description.append(f"-# Data obtained from [League of Comic Geeks](https://leagueofcomicgeeks.com/).")
-        embed.description = "\n".join(description)
-        embeds.append(embed)
-
-        return embeds
-
-    async def profile_pic(self):
-        m_ims = random.sample([i.coverImage for i in self.comics[BrandEnum.Marvel.value].values() if i.coverImage], 2)
-        d_ims = random.sample([i.coverImage for i in self.comics[BrandEnum.DC.value].values() if i.coverImage], 2)
-        ims = [await load_image(i) for i in m_ims] + [await load_image(i) for i in d_ims]
-
-        p = Profile(ims, 1200, 70, 300, 600,
-                    bg=(255, 255, 255, 240),
-                    round_corners=20)
-
-        fp = functools.partial(imager_to_bytes, p)
-        img: BytesIO = await self.bot.loop.run_in_executor(None, fp)
-
-        await self.bot.user.edit(avatar=copy.copy(img).read())
-        return img
 
     @commands.Cog.listener()
     async def on_guild_remove(self, guild):
@@ -541,58 +402,11 @@ class PullsCog(commands.Cog, name="Pulls"):
         if not self.comics:
             return await interaction.followup.send("Comics are not yet fetched.")
 
-        img = await self.profile_pic()
+        img = await profile_pic(
+                    list(self.comics[BrandEnum.Marvel.value].values()),
+                    list(self.comics[BrandEnum.DC.value].values()),
+                    self.bot)
         await interaction.followup.send(file=File(fp=img, filename="my_file.png"))
-
-    async def fetch_raw_configs(self, server: int):
-        return await self.bot.db.fetch(
-            'SELECT * FROM configuration WHERE server = $1', server
-        )
-
-    async def fetch_configs(self, server: int) -> Dict[str, Configuration]:
-        configs: List[Configuration] = [config_from_record(i) for i in await self.fetch_raw_configs(server)]
-        return {c.brand.id: c for c in configs}
-
-    @app_commands.command(name="broadcast")
-    @app_commands.guilds(*ADMIN_GUILD_IDS or None)
-    @app_commands.check(is_owner)
-    async def broadcast(self, interaction: Interaction):
-        """Opens a modal to broadcast a message to all servers."""
-        class BroadcastModal(Modal, title="Broadcast Message"):
-            header = TextInput(label="Header", required=False, max_length=256)
-            message = TextInput(label="Message", style=TextStyle.paragraph, max_length=2000)
-
-            async def on_submit(self, modal_interaction: Interaction):
-                await modal_interaction.response.defer()
-
-                embed = Embed(
-                    title=self.header.value or None,
-                    description=self.message.value,
-                    color=Marvel().color,
-                    timestamp=utils.utcnow()
-                )
-                bot = modal_interaction.client
-                embed.set_footer(text=f"Broadcast from {bot.user.display_name}", icon_url=bot.user.display_avatar.url)
-
-                con = await bot.db.fetch('SELECT * FROM configuration')
-                configurations = [config_from_record(c) for c in con]
-                channels = set(c.channel_id for c in configurations)
-
-                n = 0
-                for channel_id in channels:
-                    channel = bot.get_channel(channel_id)
-                    if channel is None:
-                        continue
-                    try:
-                        await channel.send(embed=embed)
-                        n += 1
-                    except Forbidden:
-                        print(f"Missing permissions in {channel.guild.name} ({channel.guild.id})")
-
-                await modal_interaction.followup.send(
-                    f"Broadcasted message to {n} channels (of {len(configurations)} configured channels).")
-
-        await interaction.response.send_modal(BroadcastModal())
 
     @app_commands.command(name="comics-this-week")
     @app_commands.choices(brand=BrandAutocomplete)
@@ -618,7 +432,7 @@ class PullsCog(commands.Cog, name="Pulls"):
                 kw = await fetch_keywords(self.bot.db, config.server_id)
                 comics = {k: v for k, v in comics.items() if kw.check_comic(v)}
 
-        embeds = await self.summary_embed(comics, b)
+        embeds = await summary_embed(self.order, comics, b)
         await interaction.followup.send(embeds=embeds)
 
     @app_commands.command(name="trigger-feed")
@@ -640,7 +454,7 @@ class PullsCog(commands.Cog, name="Pulls"):
 
         if not con:
             return await interaction.followup.send(
-                f"You have not set up a {b.name} feed yet in this server! Use {self.cmd_ping('setup')} to set one up!")
+                f"You have not set up a {b.name} feed yet in this server! Use {cmd_ping(self.bot.cmds, 'setup')} to set one up!")
 
         configs = [config_from_record(c) for c in con]
         for c in configs:
@@ -668,7 +482,7 @@ class PullsCog(commands.Cog, name="Pulls"):
 
         b = self.brands[brand]
         f = Format(_format)
-        configs = await self.fetch_configs(interaction.guild_id)
+        configs = await fetch_configs(self.bot.db, interaction.guild_id)
 
         if channel is None:
             channel = interaction.channel
@@ -689,7 +503,7 @@ class PullsCog(commands.Cog, name="Pulls"):
         return await interaction.followup.send(
             f"Set up the following feed in **this** channel ({channel.mention}). \n" +
             f"To edit the feed settings, use these commands: \n" +
-            " · ".join(self.cmd_ping(f"editfeed {i}") for i in ['channel', 'format', 'day', 'ping', 'pin']),
+            " · ".join(cmd_ping(self.bot.cmds, f"editfeed {i}") for i in ['channel', 'format', 'day', 'ping', 'pin']),
             embed=new_config.to_embed())
 
     @app_commands.command(name="config")
@@ -698,11 +512,11 @@ class PullsCog(commands.Cog, name="Pulls"):
         """Displays all configurations set in this server."""
         await interaction.response.defer()
 
-        configs = await self.fetch_configs(interaction.guild_id)
+        configs = await fetch_configs(self.bot.db, interaction.guild_id)
 
         if not configs:
             return await interaction.followup.send(
-                f"You have not set up any feeds yet in this server! Use {self.cmd_ping('setup')} to set one up!"
+                f"You have not set up any feeds yet in this server! Use {cmd_ping(self.bot.cmds, 'setup')} to set one up!"
             )
 
         return await interaction.followup.send(embeds=[i.to_embed() for i in configs.values()])
@@ -823,7 +637,7 @@ class PullsCog(commands.Cog, name="Pulls"):
     async def edit_config(self, interaction: Interaction, brand: str, attributes: Dict[str, Any]):
         b = self.brands[brand] if brand else None
 
-        configs = await self.fetch_configs(interaction.guild_id)
+        configs = await fetch_configs(self.bot.db, interaction.guild_id)
         if not configs:
             await interaction.followup.send(
                 "You have not set up any feeds yet in this server! Use /setup to set one up!")
@@ -853,7 +667,7 @@ class PullsCog(commands.Cog, name="Pulls"):
         await interaction.response.defer()
 
         b = self.brands[brand]
-        configs = await self.fetch_configs(interaction.guild_id)
+        configs = await fetch_configs(self.bot.db, interaction.guild_id)
 
         if b.id not in configs:
             return await interaction.followup.send("You have not set up a feed for this brand in this server.")
@@ -892,7 +706,7 @@ class PullsCog(commands.Cog, name="Pulls"):
                              "Also followed by the 'Summary' embed."
         embeds.append(meddle.to_embed(False))
 
-        summaries = await self.summary_embed({i.id: i for i in samples}, self.brands.Marvel)
+        summaries = await summary_embed(self.order, {i.id: i for i in samples}, self.brands.Marvel)
         summ = summaries[0]
         summ.title = "Summary Format"
         summ.insert_field_at(0, name="This displays all comics",
@@ -927,7 +741,7 @@ class PullsCog(commands.Cog, name="Pulls"):
         e.add_field(name="Creators", value=', '.join(f'`{i}`' for i in kw.creators) if kw.creators else "None")
         e.add_field(name="Feeds with keywords enabled",
                     value=', '.join(f'{c.brand.id} (<#{c.channel_id}>)' for c in
-                                    configs) + f'\nEnable keywords with {self.cmd_ping("editfeed check-keywords")}',
+                                    configs) + f'\nEnable keywords with {cmd_ping(self.bot.cmds, "editfeed check-keywords")}',
                     inline=False)
 
         await interaction.followup.send(embed=e)
@@ -998,32 +812,6 @@ class PullsCog(commands.Cog, name="Pulls"):
         kw.sort(key=lambda x: not x.startswith(current))
 
         return [app_commands.Choice(name=i, value=i) for i in kw][:25]
-
-    @app_commands.command(name="about")
-    async def about(self, interaction: Interaction):
-        """Information about this bot."""
-        embed = Embed(title="About", color=Marvel().color)
-        embed.description = \
-            "This bot was developed by **Rocked03#3304**. Originally created for the *Marvel Discord* " \
-            "(https://discord.gg/Marvel), this bot was later expanded for public use with *Marvel* and *DC* feeds " \
-            "available.\n\n" \
-            f"To **set up** a feed in this server, use {self.cmd_ping('setup')} (`Manage Server` required).\n\n" \
-            "**Add this bot** to your own server: " \
-            f"https://discordapp.com/oauth2/authorize?client_id={self.bot.user.id}&scope=bot&permissions={'18432'}"
-        if self.bot.user.avatar:
-            embed.set_thumbnail(url=self.bot.user.avatar.url)
-        await interaction.response.send_message(embed=embed)
-
-    @app_commands.command(name="invite")
-    async def invite(self, interaction: Interaction):
-        """Invite this bot to your own server."""
-        embed = Embed(title="Invite me!", color=Marvel().color)
-        embed.description = \
-            "**Add this bot** to your own server: " \
-            f"https://discordapp.com/oauth2/authorize?client_id={self.bot.user.id}&scope=bot&permissions={'18432'}"
-        if self.bot.user.avatar:
-            embed.set_thumbnail(url=self.bot.user.avatar.url)
-        await interaction.response.send_message(embed=embed)
 
 
 async def setup(bot):

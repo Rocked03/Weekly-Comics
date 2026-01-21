@@ -6,12 +6,8 @@ from discord import app_commands
 from discord.ext import commands
 from discord.ext.commands import Context, Greedy
 
+from funcs.utils import is_owner
 from config import ADMIN_USER_IDS, ADMIN_GUILD_IDS
-
-
-def is_owner(interaction: discord.Interaction) -> bool:
-    return interaction.user.id in ADMIN_USER_IDS
-
 
 # noinspection GrazieInspection
 class OwnerCog(commands.Cog, name="Owner"):

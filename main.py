@@ -9,7 +9,8 @@ class Zelma(commands.Bot):
         initial_extensions = [
             'funcs.postgresql',
             'owner',
-            'pulls'
+            'pulls',
+            'cogs.utility'
         ]
 
         for extension in initial_extensions:
