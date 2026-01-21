@@ -477,6 +477,40 @@ class PullsCog(commands.Cog, name="Pulls"):
         await self.bot.user.edit(avatar=copy.copy(img).read())
         return img
 
+    @commands.Cog.listener()
+    async def on_guild_remove(self, guild):
+        """Clean up configurations when the bot leaves a server."""
+        try:
+            # Fetch all configurations for this server
+            configs = await self.bot.db.fetch(
+                'SELECT * FROM configuration WHERE server = $1',
+                guild.id
+            )
+
+            if not configs:
+                return
+
+            # Cancel all scheduled feeds and delete from database
+            for record in configs:
+                config = config_from_record(record)
+                try:
+                    self.cancel_feed(config)
+                except (KeyError, AttributeError):
+                    pass
+
+            # Delete all configurations from database
+            await self.bot.db.execute(
+                'DELETE FROM configuration WHERE server = $1',
+                guild.id
+            )
+
+            print(f"[Guild Remove] Left server {guild.id} ({guild.name}). "
+                  f"Cleaned up {len(configs)} feed(s).")
+
+        except Exception as e:
+            print(f"[Guild Remove] Error cleaning up server {guild.id}: {e}")
+            traceback.print_exc()
+
     @app_commands.command(name="debug")
     @app_commands.guilds(*ADMIN_GUILD_IDS or None)
     @app_commands.check(is_owner)
