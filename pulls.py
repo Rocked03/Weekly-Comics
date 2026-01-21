@@ -148,16 +148,61 @@ class PullsCog(commands.Cog, name="Pulls"):
 
             await asyncio.sleep(random.randint(600, 3000))
 
+    async def validate_config_accessibility(self, config: Configuration) -> Tuple[bool, str]:
+        """
+        Check if the bot can access and send messages to a configuration's channel.
+
+        Returns:
+            Tuple of (is_accessible, reason_if_not)
+        """
+        guild = self.bot.get_guild(config.server_id)
+        if guild is None:
+            return False, "Guild not found"
+
+        channel = self.bot.get_channel(config.channel_id)
+        if channel is None:
+            return False, "Channel not found"
+
+        perms = channel.permissions_for(guild.me)
+        if not perms.send_messages:
+            return False, "Missing permission: Send Messages"
+        if not perms.embed_links:
+            return False, "Missing permission: Embed Links"
+
+        return True, ""
+
     async def schedule_feeds(self):
         configs = await self.bot.db.fetch('SELECT * FROM configuration')
         all_configs = [config_from_record(c) for c in configs]
 
-        # Group by day
-        by_day: Dict[int, List[Configuration]] = {}
-        for config in all_configs:
-            by_day.setdefault(config.day, []).append(config)
-
         await self.bot.wait_until_ready()
+
+        # Filter out inaccessible configurations
+        valid_configs = []
+        inaccessible_configs = []
+
+        for config in all_configs:
+            is_accessible, reason = await self.validate_config_accessibility(config)
+            if is_accessible:
+                valid_configs.append(config)
+            else:
+                inaccessible_configs.append((config, reason))
+
+        # Log inaccessible configurations
+        if inaccessible_configs:
+            print("[Pull Feed Scheduler] Inaccessible configurations:")
+            for config, reason in inaccessible_configs:
+                print(f"  - Server {config.server_id}, Brand {config.brand.name}: {reason}")
+
+            guild_not_found = [str(config.server_id) for config, reason in inaccessible_configs if
+                               reason == "Guild not found"]
+            if guild_not_found:
+                print(f"[Pull Feed Scheduler] Guild not found IDs: {' '.join(guild_not_found)}")
+
+        # Group valid configs by day
+        by_day: Dict[int, List[Configuration]] = {}
+        for config in valid_configs:
+            by_day.setdefault(config.day, []).append(config)
 
         # Calculate offsets for each day
         self.schedule_offsets: Dict[Tuple[int, str], float] = {}
@@ -165,9 +210,12 @@ class PullsCog(commands.Cog, name="Pulls"):
             offsets = await self.calculate_schedule_offsets(day_configs)
             self.schedule_offsets.update(offsets)
 
-        # Schedule all feeds
-        for config in all_configs:
+        # Schedule all valid feeds
+        for config in valid_configs:
             self.schedule_feed(config)
+
+        print(f"[Pull Feed Scheduler] Scheduled {len(valid_configs)} feeds, "
+              f"skipped {len(inaccessible_configs)} inaccessible")
 
     async def calculate_schedule_offsets(self, configs: List[Configuration]) -> Dict[Tuple[int, str], float]:
         """Calculate time offsets for configs to spread out execution."""
