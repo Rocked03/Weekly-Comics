@@ -6,7 +6,7 @@ import random
 import traceback
 from asyncio import Task
 from io import BytesIO
-from typing import Dict, List, Any, Union
+from typing import Dict, List, Any, Union, Tuple
 
 from discord import Interaction, app_commands, utils, Activity, ActivityType, Message, Forbidden, Embed, File, \
     TextChannel, Role, TextStyle, RateLimited, HTTPException
@@ -71,6 +71,8 @@ class PullsCog(commands.Cog, name="Pulls"):
 
         self.access_lock = asyncio.Lock()
         self.locks: Dict[int, asyncio.Lock] = {}
+
+        self.schedule_offsets: Dict[Tuple[int, str], float] = {}
 
         self.feed_schedules: Dict[(int, str), Task] = {}
         self.bot.loop.create_task(self.on_startup_scheduler())
@@ -148,9 +150,62 @@ class PullsCog(commands.Cog, name="Pulls"):
 
     async def schedule_feeds(self):
         configs = await self.bot.db.fetch('SELECT * FROM configuration')
+        all_configs = [config_from_record(c) for c in configs]
 
-        for c in configs:
-            self.schedule_feed(config_from_record(c))
+        # Group by day
+        by_day: Dict[int, List[Configuration]] = {}
+        for config in all_configs:
+            by_day.setdefault(config.day, []).append(config)
+
+        await self.bot.wait_until_ready()
+
+        # Calculate offsets for each day
+        self.schedule_offsets: Dict[Tuple[int, str], float] = {}
+        for day_configs in by_day.values():
+            offsets = await self.calculate_schedule_offsets(day_configs)
+            self.schedule_offsets.update(offsets)
+
+        # Schedule all feeds
+        for config in all_configs:
+            self.schedule_feed(config)
+
+    async def calculate_schedule_offsets(self, configs: List[Configuration]) -> Dict[Tuple[int, str], float]:
+        """Calculate time offsets for configs to spread out execution."""
+        # Configuration for timing (easily adjustable)
+        COMPACT_INTERVAL = 0.5  # seconds between compact feeds
+        SUMMARY_INTERVAL = 0.5  # seconds between summary feeds
+        FULL_INTERVAL = 15.0  # seconds for full feeds
+
+        # Sort by priority: format type, then server size (member count)
+        def get_priority(cfg: Configuration) -> Tuple[int, int]:
+            guild = self.bot.get_guild(cfg.server_id)
+            member_count = guild.member_count if guild else 0
+
+            # Lower number = higher priority
+            format_priority = {
+                Format.COMPACT: 0,
+                Format.SUMMARY: 1,
+                Format.FULL: 2
+            }
+            return format_priority.get(cfg.format, 3), -member_count
+
+        sorted_configs = sorted(configs, key=get_priority)
+
+        # Assign offsets
+        offsets = {}
+        current_offset = 0.0
+
+        for config in sorted_configs:
+            offsets[(config.server_id, config.brand.id)] = current_offset
+
+            if config.format == Format.FULL:
+                current_offset += FULL_INTERVAL
+            elif config.format == Format.COMPACT:
+                current_offset += COMPACT_INTERVAL
+            else:  # SUMMARY
+                current_offset += SUMMARY_INTERVAL
+
+        return offsets
 
     def schedule_feed(self, config: Configuration):
         try:
@@ -159,20 +214,26 @@ class PullsCog(commands.Cog, name="Pulls"):
             pass
 
     async def scheduler(self, config: Configuration):
-        time = next_scheduled(config.day)
-        sleep_duration = time - utils.utcnow()
+        # Get the base scheduled time
+        base_time = next_scheduled(config.day)
+
+        # Add the offset for this specific config (0.0 if not found)
+        offset = self.schedule_offsets.get((config.server_id, config.brand.id), 0.0)
+        scheduled_time = base_time + dt.timedelta(seconds=offset)
+
+        sleep_duration = scheduled_time - utils.utcnow()
 
         if sleep_duration.total_seconds() > 0:
-            print(f"[Pull Feed Scheduler] ({config.server_id}, {config.brand.name}) Timer: {sleep_duration} ({time})")
+            print(f"[Pull Feed Scheduler] ({config.server_id}, {config.brand.name}) "
+                  f"Timer: {sleep_duration} (offset: {offset:.1f}s)")
             await asyncio.sleep(sleep_duration.total_seconds())
 
-            print(
-                f"[Pull Feed Scheduler] ({config.server_id}, {config.brand.name}) Executing. {utils.utcnow()}")
-            try:
-                await self.send_comics(config)
-            except KeyError:
-                print(f"[Pull Feed Scheduler] ({config.server_id}, {config.brand.name}) KeyError, "
-                      f"probably comics not fetched yet.")
+        print(f"[Pull Feed Scheduler] ({config.server_id}, {config.brand.name}) Executing. {utils.utcnow()}")
+        try:
+            await self.send_comics(config)
+        except KeyError:
+            print(f"[Pull Feed Scheduler] ({config.server_id}, {config.brand.name}) KeyError, "
+                  f"probably comics not fetched yet.")
 
         await self.scheduler(config)
 
