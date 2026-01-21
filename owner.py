@@ -7,7 +7,7 @@ from discord.ext import commands
 from discord.ext.commands import Context, Greedy
 
 from funcs.utils import is_owner
-from config import ADMIN_USER_IDS, ADMIN_GUILD_IDS
+from config import ADMIN_GUILD_IDS
 
 # noinspection GrazieInspection
 class OwnerCog(commands.Cog, name="Owner"):

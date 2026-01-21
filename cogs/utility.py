@@ -1,11 +1,16 @@
+import copy
+import random
+
 from discord import app_commands, Interaction, TextStyle, Forbidden, Embed
 from discord.ext import commands
 from discord.ui import TextInput, Modal
 
 from config import ADMIN_GUILD_IDS
 from funcs.discord_functions import cmd_ping
+from funcs.pull_functions import summary_embed
 from funcs.utils import is_owner
-from objects.brand import Marvel
+from objects.brand import Marvel, BrandEnum, Brands
+from objects.comic import Comic
 from objects.configuration import config_from_record
 
 
@@ -14,6 +19,8 @@ class UtilityCog(commands.Cog, name="Utility"):
 
     def __init__(self, bot: commands.Bot):
         self.bot = bot
+
+        self.brands = Brands()
 
 
     @app_commands.command(name="broadcast")
@@ -85,6 +92,46 @@ class UtilityCog(commands.Cog, name="Utility"):
         await interaction.response.send_message(embed=embed)
 
 
+    @app_commands.command(name="formats")
+    async def formats(self, interaction: Interaction):
+        """Lists the Format comic_types available for feeds."""
+        await interaction.response.defer(ephemeral=True)
+
+        embeds = []
+
+        comics = list(self.bot.comics[Marvel().id].values())
+        samples = random.sample(comics, len(comics) if 4 > len(comics) else 4)
+
+        meddle: Comic = copy.copy(random.choice(samples))
+        meddle.creators = {"Writer": ["Rocked03"], "Artist": ["Rocked03"]}
+        meddle.price = 99.99
+        meddle.page_count = 99
+        meddle.copyright = "This isn't a real comic (aside from the cover and links)."
+
+        meddle.title = "Full Format"
+        meddle.description = "The 'Full' Format lists all comics in an embed like this one, giving all details and a " \
+                             "full-sized cover image, followed by the Summary embed."
+        embeds.append(meddle.to_embed())
+
+        meddle.title = "Compact Format"
+        meddle.description = "The 'Compact' Format is similar to the 'Full', however the cover image is a small " \
+                             "thumbnail, and some details (non-primary creators, etc.) are omitted for brevity. " \
+                             "Also followed by the 'Summary' embed."
+        embeds.append(meddle.to_embed(False))
+
+        summaries = await summary_embed(self.bot.order, {i.id: i for i in samples}, self.brands.Marvel)
+        summ = summaries[0]
+        summ.title = "Summary Format"
+        summ.insert_field_at(0, name="This displays all comics",
+                             value="Each comic and author is listed as an easy summary, attached to all formats.")
+        summ.insert_field_at(1, name="'More' jumps dynamically",
+                             value="Sends you to higher embed if 'Full' or 'Compact', " +
+                                   "or directly to the website if only 'Summary'")
+        summ.set_footer(text="This is an abbreviated version of Summary - " +
+                             "the real one often has around two dozen items.")
+        embeds.append(summ)
+
+        await interaction.followup.send(embeds=embeds)
 
 
 async def setup(bot: commands.Bot):

@@ -1,22 +1,19 @@
 import asyncio
 import copy
 import datetime as dt
-import functools
 import random
 import traceback
 from asyncio import Task
-from io import BytesIO
 from typing import Dict, List, Any, Union, Tuple
 
-from discord import Interaction, app_commands, utils, Activity, ActivityType, Message, Forbidden, Embed, File, \
-    TextChannel, Role, RateLimited, HTTPException
+from discord import Interaction, app_commands, utils, Activity, ActivityType, Forbidden, Embed, File, \
+    TextChannel, Role
 from discord.app_commands import checks
 from discord.ext import commands
 
 from comic_types.brand import Brand
 from comic_types.locg import ComicDetails
 from config import ADMIN_GUILD_IDS
-from funcs.profile import load_image, Profile, imager_to_bytes
 from funcs.utils import f_date, week_of_date, is_owner
 from funcs.discord_functions import on_app_command_error, cmd_ping, pin, profile_pic
 from funcs.pull_functions import validate_config_accessibility, summary_embed
@@ -25,7 +22,7 @@ from objects.brand import Brands, BrandEnum, BrandAutocomplete, Marvel
 from objects.comic import Comic, ComicMessage
 from objects.configuration import Configuration, Format, config_from_record, format_autocomplete, \
     WEEKDAYS, next_scheduled
-from objects.keywords import fetch_keywords, sanitise, add_keyword, Types, delete_keyword
+from objects.keywords import fetch_keywords
 from services.comic_releases import fetch_comic_releases_detailed
 
 
@@ -36,8 +33,8 @@ class PullsCog(commands.Cog, name="Pulls"):
 
         self.brands = Brands()
 
-        self.comics: Dict[str, Dict[int, Comic]] = {}
-        self.order: Dict[str, List[int]] = {b.id: [] for b in self.brands}
+        self.bot.comics: Dict[str, Dict[int, Comic]] = {}
+        self.bot.order: Dict[str, List[int]] = {b.id: [] for b in self.brands}
 
         self.access_lock = asyncio.Lock()
         self.locks: Dict[int, asyncio.Lock] = {}
@@ -79,7 +76,7 @@ class PullsCog(commands.Cog, name="Pulls"):
             print(f"Next crawl initiating:")
 
     async def schedule_pfp(self):
-        while not self.comics:
+        while not self.bot.comics:
             await asyncio.sleep(60)
 
         while not self.bot.is_closed():
@@ -93,8 +90,8 @@ class PullsCog(commands.Cog, name="Pulls"):
 
             try:
                 await profile_pic(
-                    list(self.comics[BrandEnum.Marvel.value].values()),
-                    list(self.comics[BrandEnum.DC.value].values()),
+                    list(self.bot.comics[BrandEnum.Marvel.value].values()),
+                    list(self.bot.comics[BrandEnum.DC.value].values()),
                     self.bot)
             except Exception as e:
                 print(f"Error while updating profile picture: {e}")
@@ -102,12 +99,12 @@ class PullsCog(commands.Cog, name="Pulls"):
                 return None
 
     async def schedule_activity(self):
-        while not self.comics:
+        while not self.bot.comics:
             await asyncio.sleep(10)
 
         while not self.bot.is_closed():
             comics = []
-            for v in self.comics.values():
+            for v in self.bot.comics.values():
                 comics += [i.title for i in v.values()]
 
             title = random.choice(comics)
@@ -237,19 +234,19 @@ class PullsCog(commands.Cog, name="Pulls"):
 
     async def fetch_comics(self):
         print(f"~~ Fetching comics ~~   {utils.utcnow()}")
-        self.comics = {}
-        self.order = {}
+        self.bot.comics = {}
+        self.bot.order = {}
 
         for current_brand in self.brands:
             print(f" > Fetching {current_brand.name}")
             try:
                 comics = await fetch_comic_releases_detailed(publisher=current_brand.locg_id)
                 comic_dict = {comic.id: comic for comic in comics}
-                self.comics[current_brand.id] = comic_dict
+                self.bot.comics[current_brand.id] = comic_dict
                 self.sort_order(comic_dict, current_brand)
                 date = week_of_date(comics)
                 print(
-                    f"   > {len(self.comics[current_brand.id])} loaded for the week of {f_date(date)} ")
+                    f"   > {len(self.bot.comics[current_brand.id])} loaded for the week of {f_date(date)} ")
             except Exception as e:
                 print(f"   ! Error fetching {current_brand.name} comics: {e}")
                 traceback.print_exc()
@@ -259,7 +256,7 @@ class PullsCog(commands.Cog, name="Pulls"):
     def sort_order(self, comic_dict: Dict[int, ComicDetails], brand: Brand):
         format_order = ["Comic", "Trade Paperback", "Hardcover"]
 
-        self.order[brand.id] = sorted(
+        self.bot.order[brand.id] = sorted(
             comic_dict.keys(),
             key=lambda x: (
                 format_order.index(comic_dict[x].format) if comic_dict[x].format in format_order else len(format_order),
@@ -278,7 +275,7 @@ class PullsCog(commands.Cog, name="Pulls"):
                 print(f"Channel {config.channel_id} not found for {config.brand.name} feed in {config.server_id}.")
                 return
 
-            comics: Dict[int, Union[Comic, ComicMessage]] = self.comics[config.brand.id].copy()
+            comics: Dict[int, Union[Comic, ComicMessage]] = self.bot.comics[config.brand.id].copy()
 
             if config.check_keywords:
                 kw = await fetch_keywords(self.bot.db, config.server_id)
@@ -302,7 +299,7 @@ class PullsCog(commands.Cog, name="Pulls"):
 
                         instances = {}
 
-                        for cid in self.order[config.brand.id]:
+                        for cid in self.bot.order[config.brand.id]:
                             if cid in comics:
                                 try:
                                     msg = await channel.send(embed=embeds[cid])
@@ -312,7 +309,7 @@ class PullsCog(commands.Cog, name="Pulls"):
 
                         comics = instances
 
-                    summary_embeds = await summary_embed(self.order, comics, config.brand, lead_msg)
+                    summary_embeds = await summary_embed(self.bot.order, comics, config.brand, lead_msg)
 
                     embed_selection: List[Embed] = []
                     first_msg = None
@@ -379,7 +376,7 @@ class PullsCog(commands.Cog, name="Pulls"):
         """Debug command, dev-only."""
         await interaction.response.defer()
 
-        if not self.comics:
+        if not self.bot.comics:
             return await interaction.followup.send("Comics are not yet fetched.")
 
         con = await self.bot.db.fetch(
@@ -399,12 +396,12 @@ class PullsCog(commands.Cog, name="Pulls"):
         """Debug command, dev-only."""
         await interaction.response.defer()
 
-        if not self.comics:
+        if not self.bot.comics:
             return await interaction.followup.send("Comics are not yet fetched.")
 
         img = await profile_pic(
-                    list(self.comics[BrandEnum.Marvel.value].values()),
-                    list(self.comics[BrandEnum.DC.value].values()),
+                    list(self.bot.comics[BrandEnum.Marvel.value].values()),
+                    list(self.bot.comics[BrandEnum.DC.value].values()),
                     self.bot)
         await interaction.followup.send(file=File(fp=img, filename="my_file.png"))
 
@@ -416,10 +413,10 @@ class PullsCog(commands.Cog, name="Pulls"):
             ephemeral=not interaction.channel.permissions_for(interaction.user).embed_links)
         b = self.brands[brand]
 
-        if b.id not in self.comics:
+        if b.id not in self.bot.comics:
             return await interaction.followup.send("Comics are not yet fetched.")
 
-        comics = self.comics[b.id]
+        comics = self.bot.comics[b.id]
 
         con = await self.bot.db.fetch(
             'SELECT * FROM configuration WHERE server = $1 and brand = $2',
@@ -432,7 +429,7 @@ class PullsCog(commands.Cog, name="Pulls"):
                 kw = await fetch_keywords(self.bot.db, config.server_id)
                 comics = {k: v for k, v in comics.items() if kw.check_comic(v)}
 
-        embeds = await summary_embed(self.order, comics, b)
+        embeds = await summary_embed(self.bot.order, comics, b)
         await interaction.followup.send(embeds=embeds)
 
     @app_commands.command(name="trigger-feed")
@@ -443,7 +440,7 @@ class PullsCog(commands.Cog, name="Pulls"):
         await interaction.response.defer()
         b = self.brands[brand]
 
-        if b.id not in self.comics.keys():
+        if b.id not in self.bot.comics.keys():
             return await interaction.followup.send(
                 "Comics are not yet fetched. Please wait a few moments and try again.")
 
@@ -505,313 +502,6 @@ class PullsCog(commands.Cog, name="Pulls"):
             f"To edit the feed settings, use these commands: \n" +
             " · ".join(cmd_ping(self.bot.cmds, f"editfeed {i}") for i in ['channel', 'format', 'day', 'ping', 'pin']),
             embed=new_config.to_embed())
-
-    @app_commands.command(name="config")
-    @checks.has_permissions(manage_guild=True)
-    async def config(self, interaction: Interaction):
-        """Displays all configurations set in this server."""
-        await interaction.response.defer()
-
-        configs = await fetch_configs(self.bot.db, interaction.guild_id)
-
-        if not configs:
-            return await interaction.followup.send(
-                f"You have not set up any feeds yet in this server! Use {cmd_ping(self.bot.cmds, 'setup')} to set one up!"
-            )
-
-        return await interaction.followup.send(embeds=[i.to_embed() for i in configs.values()])
-
-    edit_group = app_commands.Group(name="editfeed", description="Edit the feeds in your server.")
-
-    @edit_group.command(name="channel")
-    @checks.has_permissions(manage_guild=True)
-    @app_commands.describe(
-        channel="The channel to set the feed to.",
-        brand="The brand feed to set. Leave empty to edit all feed configurations."
-    )
-    @app_commands.choices(brand=BrandAutocomplete)
-    async def config_channel(self, interaction: Interaction, channel: TextChannel, brand: str = None):
-        """Sets the channel of the feed. Must have Manage Server permissions."""
-        await interaction.response.defer()
-
-        txt = await self.edit_config(interaction, brand, {'channel_id': channel.id})
-        if txt:
-            txt.append(f"Set channel to: {channel.mention}")
-            await interaction.followup.send('\n'.join(txt))
-
-    @edit_group.command(name="format")
-    @checks.has_permissions(manage_guild=True)
-    @app_commands.describe(
-        _format="Feed format. Use /formats to view options.",
-        brand="The brand feed to set. Leave empty to edit all feed configurations."
-    )
-    @app_commands.rename(_format="format")
-    @app_commands.choices(
-        brand=BrandAutocomplete,
-        _format=format_autocomplete
-    )
-    async def config_format(self, interaction: Interaction, _format: str, brand: str = None):
-        """Sets the format type of the feed."""
-        await interaction.response.defer()
-
-        f = Format(_format)
-        txt = await self.edit_config(interaction, brand, {'format': f})
-        if txt:
-            txt.append(f"Set format to: {f.value}")
-            await interaction.followup.send('\n'.join(txt))
-
-    @edit_group.command(name="day")
-    @checks.has_permissions(manage_guild=True)
-    @app_commands.describe(
-        day="The day to set the weekly feed. " +
-            "The day the feed rolls over to the next week varies between brands.",
-        brand="The brand feed to set. Leave empty to edit all feed configurations."
-    )
-    @app_commands.choices(
-        brand=BrandAutocomplete,
-        day=[app_commands.Choice(name=i, value=n) for n, i in enumerate(WEEKDAYS)]  # if n in [1, 2, 3]]
-    )
-    async def config_day(self, interaction: Interaction, day: int, brand: str = None):
-        """Sets the day of the weekly feed."""
-        await interaction.response.defer()
-
-        txt = await self.edit_config(interaction, brand, {'day': day})
-        if txt:
-            txt.append(f"Set feed weekday to: {WEEKDAYS[day]}")
-            await interaction.followup.send('\n'.join(txt))
-
-    @edit_group.command(name="ping")
-    @checks.has_permissions(manage_guild=True)
-    @app_commands.describe(
-        ping="The role to ping when the feed is posted. Leave empty to clear. " +
-             "This role must be pingable, or the bot must have @everyone perms in the channel.",
-        brand="The brand feed to set. Leave empty to edit all feed configurations."
-    )
-    @app_commands.choices(brand=BrandAutocomplete)
-    async def config_ping(self, interaction: Interaction, ping: Role = None, brand: str = None):
-        """Sets the role ping of the feed."""
-        await interaction.response.defer()
-
-        txt = await self.edit_config(interaction, brand, {'ping': ping.id if ping else None})
-        if txt:
-            if ping:
-                txt.append(f"Set role ping to:")
-                e = Embed(description=ping.mention)
-                await interaction.followup.send('\n'.join(txt), embed=e)
-            else:
-                txt.append(f"Cleared role ping.")
-                await interaction.followup.send('\n'.join(txt))
-
-    @edit_group.command(name="pin")
-    @checks.has_permissions(manage_guild=True)
-    @app_commands.describe(
-        pin="Toggle whether to pin each week's listing in the channel.",
-        brand="The brand feed to set. Leave empty to edit all feed configurations."
-    )
-    @app_commands.choices(brand=BrandAutocomplete)
-    async def config_pin(self, interaction: Interaction, pin: bool, brand: str = None):
-        """Toggles pinning the weekly feed. Bot must have MANAGE MESSAGE perms in the feed's channel."""
-        await interaction.response.defer()
-
-        txt = await self.edit_config(interaction, brand, {'pin': pin})
-        if txt:
-            txt.append("Enabled channel pins." if pin else "Disabled channel pins.")
-            await interaction.followup.send('\n'.join(txt))
-
-    @edit_group.command(name="check-keywords")
-    @checks.has_permissions(manage_guild=True)
-    @app_commands.describe(
-        keywords="Toggle whether to filter the feed by /keywords.",
-        brand="The brand feed to set. Leave empty to edit all feed configurations."
-    )
-    @app_commands.choices(brand=BrandAutocomplete)
-    async def config_keywords(self, interaction: Interaction, keywords: bool, brand: str = None):
-        """Toggles filtering the feed by /keywords."""
-        await interaction.response.defer()
-
-        txt = await self.edit_config(interaction, brand, {'check_keywords': keywords})
-        if txt:
-            txt.append("Enabled keyword filter." if keywords else "Disabled keyword filter.")
-            await interaction.followup.send('\n'.join(txt))
-
-    async def edit_config(self, interaction: Interaction, brand: str, attributes: Dict[str, Any]):
-        b = self.brands[brand] if brand else None
-
-        configs = await fetch_configs(self.bot.db, interaction.guild_id)
-        if not configs:
-            await interaction.followup.send(
-                "You have not set up any feeds yet in this server! Use /setup to set one up!")
-            return None
-        filtered = sorted([v for k, v in configs.items() if b is None or k == b.id], key=lambda x: x.brand.id)
-        if not filtered:
-            await interaction.followup.send(f"You have not set up a `{b.name}` feed yet in this server!")
-            return None
-
-        for c in filtered:
-            for a, v in attributes.items():
-                c.__setattr__(a, v)
-            await c.edit_sql(self.bot.db)
-
-            if "day" in attributes:
-                self.cancel_feed(c)
-                self.schedule_feed(c)
-
-        return [f"Edited configuration(s): {', '.join(f'`{c.brand.name}`' for c in filtered)}"]
-
-    @edit_group.command(name="delete-feed")
-    @checks.has_permissions(manage_guild=True)
-    @app_commands.describe(brand="The comic brand feed to delete.")
-    @app_commands.choices(brand=BrandAutocomplete)
-    async def delete_feed(self, interaction: Interaction, brand: str):
-        """Deletes a feed. Dangerous!"""
-        await interaction.response.defer()
-
-        b = self.brands[brand]
-        configs = await fetch_configs(self.bot.db, interaction.guild_id)
-
-        if b.id not in configs:
-            return await interaction.followup.send("You have not set up a feed for this brand in this server.")
-        c = configs[b.id]
-
-        await c.delete_from_sql(self.bot.db)
-
-        self.cancel_feed(c)
-
-        return await interaction.followup.send("**DELETED** the following feed:", embed=c.to_embed())
-
-    @app_commands.command(name="formats")
-    async def formats(self, interaction: Interaction):
-        """Lists the Format comic_types available for feeds."""
-        await interaction.response.defer(ephemeral=True)
-
-        embeds = []
-
-        comics = list(self.comics[BrandEnum.Marvel.id].values())
-        samples = random.sample(comics, len(comics) if 4 > len(comics) else 4)
-
-        meddle: Comic = copy.copy(random.choice(samples))
-        meddle.creators = {"Writer": ["Rocked03"], "Artist": ["Rocked03"]}
-        meddle.price = 99.99
-        meddle.page_count = 99
-        meddle.copyright = "This isn't a real comic (aside from the cover and links)."
-
-        meddle.title = "Full Format"
-        meddle.description = "The 'Full' Format lists all comics in an embed like this one, giving all details and a " \
-                             "full-sized cover image, followed by the Summary embed."
-        embeds.append(meddle.to_embed())
-
-        meddle.title = "Compact Format"
-        meddle.description = "The 'Compact' Format is similar to the 'Full', however the cover image is a small " \
-                             "thumbnail, and some details (non-primary creators, etc.) are omitted for brevity. " \
-                             "Also followed by the 'Summary' embed."
-        embeds.append(meddle.to_embed(False))
-
-        summaries = await summary_embed(self.order, {i.id: i for i in samples}, self.brands.Marvel)
-        summ = summaries[0]
-        summ.title = "Summary Format"
-        summ.insert_field_at(0, name="This displays all comics",
-                             value="Each comic and author is listed as an easy summary, attached to all formats.")
-        summ.insert_field_at(1, name="'More' jumps dynamically",
-                             value="Sends you to higher embed if 'Full' or 'Compact', " +
-                                   "or directly to the website if only 'Summary'")
-        summ.set_footer(text="This is an abbreviated version of Summary - " +
-                             "the real one often has around two dozen items.")
-        embeds.append(summ)
-
-        await interaction.followup.send(embeds=embeds)
-
-    kw_group = app_commands.Group(name="keywords", description="Filter your feeds by keyword.")
-
-    @kw_group.command(name='view')
-    @checks.has_permissions(manage_guild=True)
-    async def kw_view(self, interaction: Interaction):
-        """Lists your keywords that filter your feeds."""
-        await interaction.response.defer()
-
-        kw = await fetch_keywords(self.bot.db, interaction.guild_id)
-
-        cons = await self.bot.db.fetch('SELECT * FROM configuration WHERE server = $1 AND check_key = $2',
-                                       interaction.guild_id, True)
-        configs = [config_from_record(c) for c in cons]
-
-        e = Embed(title="Keywords", colour=Marvel.color)
-
-        e.add_field(name="Keys (Title & Description)",
-                    value=', '.join(f'`{i}`' for i in kw.keys) if kw.keys else "None")
-        e.add_field(name="Creators", value=', '.join(f'`{i}`' for i in kw.creators) if kw.creators else "None")
-        e.add_field(name="Feeds with keywords enabled",
-                    value=', '.join(f'{c.brand.id} (<#{c.channel_id}>)' for c in
-                                    configs) + f'\nEnable keywords with {cmd_ping(self.bot.cmds, "editfeed check-keywords")}',
-                    inline=False)
-
-        await interaction.followup.send(embed=e)
-
-    @kw_group.command(name='add-key')
-    @app_commands.describe(keyword="Keyword to check for in titles and descriptions.")
-    @checks.has_permissions(manage_guild=True)
-    async def kw_add_key(self, interaction: Interaction, keyword: str):
-        """Add a keyword to be filter titles and descriptions."""
-        await self.add_kw(interaction, keyword, Types.KEYS)
-
-    @kw_group.command(name='add-creator')
-    @app_commands.describe(keyword="Keyword to check for in creators.")
-    @checks.has_permissions(manage_guild=True)
-    async def kw_add_creator(self, interaction: Interaction, keyword: str):
-        """Add a keyword to be filter creators."""
-        await self.add_kw(interaction, keyword, Types.CREATORS)
-
-    async def add_kw(self, interaction: Interaction, keyword: str, _type: Types):
-        await interaction.response.defer()
-        keyword = sanitise(keyword)
-        success = await add_keyword(self.bot.db, interaction.guild_id, keyword, _type)
-
-        if success:
-            return await interaction.followup.send(f'Successfully added "{keyword}" to your keyword filter!')
-        else:
-            return await interaction.followup.send(f'"{keyword}" is already in your keyword filter!')
-
-    @kw_group.command(name='delete-key')
-    @app_commands.describe(keyword="Keyword to delete.")
-    @checks.has_permissions(manage_guild=True)
-    async def kw_delete_key(self, interaction: Interaction, keyword: str):
-        """Delete a title/description filter keyword."""
-        await self.delete_kw(interaction, keyword, Types.KEYS)
-
-    @kw_group.command(name='delete-creator')
-    @app_commands.describe(keyword="Keyword to delete.")
-    @checks.has_permissions(manage_guild=True)
-    async def kw_delete_creator(self, interaction: Interaction, keyword: str):
-        """Delete a creator filter keyword."""
-        await self.delete_kw(interaction, keyword, Types.CREATORS)
-
-    async def delete_kw(self, interaction: Interaction, keyword: str, _type: Types):
-        await interaction.response.defer()
-        keyword = sanitise(keyword)
-        success = await delete_keyword(self.bot.db, interaction.guild_id, keyword, _type)
-
-        if success:
-            return await interaction.followup.send(f'Successfully deleted "{keyword}" from your keyword filter!')
-        else:
-            return await interaction.followup.send(f'"{keyword}" is not in your keyword filter!')
-
-    @kw_delete_key.autocomplete("keyword")
-    async def kw_delete_autocomplete(self, interaction: Interaction, current: str):
-        return await self.autocomplete_kw(interaction, current, _type=Types.KEYS)
-
-    @kw_delete_creator.autocomplete("keyword")
-    async def kw_delete_autocomplete(self, interaction: Interaction, current: str):
-        return await self.autocomplete_kw(interaction, current, _type=Types.CREATORS)
-
-    async def autocomplete_kw(self, interaction: Interaction, current: str, *, _type: Types):
-        current = sanitise(current)
-        kws = await self.bot.db.fetch('SELECT (keyword) FROM keywords WHERE server = $1 AND type = $2',
-                                      interaction.guild_id, _type.value)
-
-        kw = [i['keyword'] for i in kws if current in i['keyword']]
-        kw.sort()
-        kw.sort(key=lambda x: not x.startswith(current))
-
-        return [app_commands.Choice(name=i, value=i) for i in kw][:25]
 
 
 async def setup(bot):

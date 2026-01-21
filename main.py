@@ -10,6 +10,8 @@ class Zelma(commands.Bot):
             'funcs.postgresql',
             'owner',
             'pulls',
+            'cogs.keywords',
+            'cogs.edit_config',
             'cogs.utility'
         ]
 
