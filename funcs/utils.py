@@ -1,5 +1,12 @@
+import datetime as dt
 from dataclasses import fields, is_dataclass
-from typing import Type, TypeVar
+from typing import Type, TypeVar, List
+
+from discord import Interaction
+
+from comic_types.locg import ComicDetails
+from config import ADMIN_USER_IDS
+from objects.brand import Brands
 
 T = TypeVar('T')
 
@@ -24,3 +31,26 @@ def from_dict(data_class: Type[T], data: dict) -> T:
                 init_args[field_name] = value
 
     return data_class(**init_args)
+
+
+async def check_brand(brand: str, interaction: Interaction = None):
+    brands = Brands()
+    if brand is None:
+        return None
+    if brand not in brands:
+        if interaction:
+            await interaction.followup.send("That is not a valid brand.")
+        return False
+    return brands[brand]
+
+
+def f_date(date: dt.date):
+    return f"{date:%d %B %Y}".lstrip("0")
+
+
+def week_of_date(comics: List[ComicDetails]) -> dt.date:
+    return min(c.releaseDate for c in comics if c.format == "Comic") if comics else dt.date.today()
+
+
+def is_owner(interaction: Interaction) -> bool:
+    return interaction.user.id in ADMIN_USER_IDS

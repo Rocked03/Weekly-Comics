@@ -1,7 +1,22 @@
+from typing import Dict, List
+
+from asyncpg import Pool
 from discord.ext import commands
 import asyncpg
 
 from config import *
+from objects.configuration import Configuration, config_from_record
+
+
+async def fetch_raw_configs(db: Pool, server: int):
+    return await db.fetch(
+        'SELECT * FROM configuration WHERE server = $1', server
+    )
+
+
+async def fetch_configs(db: Pool, server: int) -> Dict[str, Configuration]:
+    configs: List[Configuration] = [config_from_record(i) for i in await fetch_raw_configs(db, server)]
+    return {c.brand.id: c for c in configs}
 
 
 class PostgreSQLCog(commands.Cog, name="PostgreSQL"):
