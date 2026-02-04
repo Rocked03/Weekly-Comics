@@ -65,13 +65,18 @@ class PullsCog(commands.Cog, name="Pulls"):
             except Exception:
                 traceback.print_exc()
 
+            # Calculate next scheduled time (11:45 UTC or 23:45 UTC)
             now = utils.utcnow()
-            time = dt.datetime.combine(now, dt.time(0), tzinfo=dt.timezone.utc)
-            time -= dt.timedelta(minutes=15)
-            sleep_duration = time - utils.utcnow()
-            while sleep_duration.total_seconds() <= 0:
-                sleep_duration += dt.timedelta(days=1)
-            print(f"Next crawl in {sleep_duration.total_seconds()}s (in {sleep_duration})")
+            today = now.date()
+            times = [(11, 45), (23, 45)]
+            target_times = [dt.datetime.combine(today, dt.time(*t), tzinfo=dt.timezone.utc) for t in times]
+            target_times.append(
+                dt.datetime.combine(today + dt.timedelta(days=1), dt.time(*times[0]), tzinfo=dt.timezone.utc))
+
+            next_time = next(t for t in target_times if t > now)
+            sleep_duration = next_time - now
+
+            print(f"Next crawl in {sleep_duration.total_seconds()}s (in {sleep_duration}) at {next_time.strftime('%Y-%m-%d %H:%M:%S UTC')}")
             await asyncio.sleep(sleep_duration.total_seconds())
             print(f"Next crawl initiating:")
 
