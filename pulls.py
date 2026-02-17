@@ -410,6 +410,22 @@ class PullsCog(commands.Cog, name="Pulls"):
                     self.bot)
         await interaction.followup.send(file=File(fp=img, filename="my_file.png"))
 
+    @app_commands.command(name="refetch-comics")
+    @app_commands.guilds(*ADMIN_GUILD_IDS or None)
+    @app_commands.check(is_owner)
+    async def refetch_comics(self, interaction: Interaction):
+        """Manually trigger comic fetching. Dev-only."""
+        await interaction.response.defer()
+
+        await interaction.followup.send("Starting comic fetch...")
+
+        try:
+            await self.fetch_comics()
+            await interaction.followup.send("✅ Comics fetched successfully!")
+        except Exception as e:
+            await interaction.followup.send(f"❌ Error fetching comics: {e}")
+            traceback.print_exc()
+
     @app_commands.command(name="comics-this-week")
     @app_commands.choices(brand=BrandAutocomplete)
     async def comics_this_week(self, interaction: Interaction, brand: str):
