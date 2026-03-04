@@ -6,7 +6,7 @@ from discord.ext import commands
 
 from funcs.discord_functions import cmd_ping
 from funcs.postgresql import fetch_configs
-from objects.brand import BrandAutocomplete
+from objects.brand import BrandAutocomplete, Brands
 from objects.configuration import format_autocomplete, WEEKDAYS, Format
 
 
@@ -15,6 +15,7 @@ class EditConfigCog(commands.Cog, name="Edit Configuration"):
 
     def __init__(self, bot: commands.Bot):
         self.bot = bot
+        self.brands = Brands()
 
     edit_group = app_commands.Group(name="editfeed", description="Edit the feeds in your server.")
 
