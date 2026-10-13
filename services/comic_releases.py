@@ -60,11 +60,17 @@ async def fetch_comic_details(comics: list[ComicRequest]) -> list[ComicDetails]:
             resp.raise_for_status()
             data = await resp.json()
             results = []
+            dropped = []
             for item in data:
-                if 'error' not in item:
-                    if 'releaseDate' in item and item['releaseDate']:
-                        item['releaseDate'] = datetime.fromisoformat(item['releaseDate'].replace('Z', '')).date()
-                    results.append(ComicDetails(**item))
+                if 'error' in item:
+                    dropped.append(item)
+                    continue
+                if 'releaseDate' in item and item['releaseDate']:
+                    item['releaseDate'] = datetime.fromisoformat(item['releaseDate'].replace('Z', '')).date()
+                results.append(ComicDetails(**item))
+            if dropped:
+                print(f"[Comic Details] Dropped {len(dropped)} errored comics: "
+                      + ", ".join(f"{i.get('comicId')} ({i.get('title')})" for i in dropped))
             return results
 
 
