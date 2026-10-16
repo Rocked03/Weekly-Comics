@@ -1,3 +1,5 @@
+import asyncio
+import sys
 from typing import Dict, List
 
 from asyncpg import Pool
@@ -31,8 +33,19 @@ class PostgreSQLCog(commands.Cog, name="PostgreSQL"):
         self.bot.postgresql_loaded = False
 
     async def load_postgresql(self):
-        self.bot.db = await asyncpg.create_pool(**self.credentials)
-        self.bot.postgresql_loaded = True
+        max_attempts = 30
+        for attempt in range(1, max_attempts + 1):
+            try:
+                self.bot.db = await asyncpg.create_pool(**self.credentials)
+                self.bot.postgresql_loaded = True
+                print("[PostgreSQL] Connection pool established.")
+                return
+            except Exception as e:
+                print(f"[PostgreSQL] Attempt {attempt}/{max_attempts} failed: {e}")
+                if attempt == max_attempts:
+                    print("[PostgreSQL] All attempts failed. Exiting for restart.")
+                    sys.exit(1)
+                await asyncio.sleep(10)
 
 
 async def setup(bot):
