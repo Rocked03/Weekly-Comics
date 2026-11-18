@@ -15,16 +15,17 @@ from comic_types.brand import Brand
 from comic_types.locg import ComicDetails, ComicData, ComicRequest
 from config import ADMIN_GUILD_IDS
 from funcs.utils import f_date, week_of_date, is_owner, from_dict
-from funcs.weeks import week_anchor
+from funcs.weeks import week_anchor, target_week
 from funcs.discord_functions import on_app_command_error, cmd_ping, pin, profile_pic
 from funcs.pull_functions import validate_config_accessibility, summary_embed
 from funcs.postgresql import fetch_configs
 from objects.brand import Brands, BrandEnum, BrandAutocomplete, Marvel
 from objects.comic import Comic, ComicMessage
 from objects.configuration import Configuration, Format, config_from_record, format_autocomplete, \
-    WEEKDAYS, next_scheduled
+    WEEKDAYS, next_scheduled, Schedule
 from objects.keywords import fetch_keywords
-from services.comic_releases import fetch_comic_releases_detailed
+from services.comic_releases import fetch_comic_releases_detailed, fetch_comic_releases, fetch_comic_details
+from services.week_cache import fetch_week, upsert_week
 
 
 class PullsCog(commands.Cog, name="Pulls"):
@@ -248,16 +249,22 @@ class PullsCog(commands.Cog, name="Pulls"):
         print(f"~~ Fetching comics ~~   {utils.utcnow()}")
         self.bot.comics = {}
 
-        live_week = week_anchor(utils.utcnow().date())
+        today = utils.utcnow().date()
+        live_week = week_anchor(today)
+
+        configs = [config_from_record(c) for c in await self.bot.db.fetch('SELECT * FROM configuration')]
+        brand_ids = {b.id for b in self.brands}
+        needed = {live_week} | {target_week(c.schedule, today) for c in configs if c.brand.id in brand_ids}
 
         for current_brand in self.brands:
             print(f" > Fetching {current_brand.name}")
             try:
-                comics = await fetch_comic_releases_detailed(publisher=current_brand.locg_id)
-                comic_dict = {comic.id: comic for comic in comics}
-                self.bot.comics.setdefault(current_brand.id, {})[live_week] = comic_dict
-                self.sort_order(comic_dict, current_brand, live_week)
-                date = week_of_date(comics)
+                for week in sorted(needed):
+                    comics = await self.crawl_week(current_brand, week, live=(week == live_week))
+                    comic_dict = {comic.id: comic for comic in comics}
+                    self.bot.comics.setdefault(current_brand.id, {})[week] = comic_dict
+                    self.sort_order(comic_dict, current_brand, week)
+                date = week_of_date(list(self.bot.comics[current_brand.id][live_week].values()))
                 print(
                     f"   > {len(self.bot.comics[current_brand.id][live_week])} loaded for the week of {f_date(date)} ")
             except Exception as e:
@@ -265,6 +272,58 @@ class PullsCog(commands.Cog, name="Pulls"):
                 traceback.print_exc()
 
         print(f"~~ Comics fetched ~~   {utils.utcnow()}")
+
+    @staticmethod
+    async def fetch_details_for(releases: list[ComicData]) -> list[Comic]:
+        details = await fetch_comic_details([
+            ComicRequest(
+                comicId=comic.parentId if comic.parentId else comic.id,
+                title=comic.titlePath,
+                variantId=comic.variantId
+            ) for comic in releases
+        ])
+        return [Comic(**from_dict(ComicDetails, detail.__dict__).__dict__) for detail in details]
+
+    async def crawl_week(self, brand: Brand, week: dt.date, live: bool) -> list[Comic]:
+        cached = await fetch_week(self.bot.db, brand.id, week)
+
+        # Frozen weeks (any past week): serve the immutable snapshot, never re-query.
+        if cached is not None and not live:
+            return cached[0]
+
+        # Live week: the cheap, CF-safe overview list is always checked.
+        releases = await fetch_comic_releases(
+            date=None if live else week.isoformat(),
+            publisher=brand.locg_id
+        )
+
+        if cached is None:
+            comics = await self.fetch_details_for(releases)
+        else:
+            cached_comics, cached_degraded = cached
+            list_state = {c.id: (c.title, c.date.isoformat(), c.price) for c in releases}
+            cached_state = {c.id: (c.title, c.releaseDate.isoformat(), c.price) for c in cached_comics}
+            stale = [r for r in releases if list_state[r.id] != cached_state.get(r.id)]
+            healable = {int(i) for i in cached_degraded} & set(list_state)
+            heal = [r for r in releases if r.id in healable and r.id not in {s.id for s in stale}]
+            fetched = await self.fetch_details_for(stale + heal)
+            fetched_ids = {c.id for c in fetched}
+            comics = ([c for c in cached_comics
+                       if c.id in list_state and list_state[c.id] == cached_state[c.id] and c.id not in fetched_ids]
+                      + fetched)
+
+        await upsert_week(self.bot.db, brand.id, week, comics)
+        return comics
+
+    async def ensure_week(self, brand: Brand, week: dt.date):
+        """Fetch and cache a week on demand because a feed/command requested it."""
+        if week in self.bot.comics.get(brand.id, {}):
+            return
+        comics = await fetch_comic_releases_detailed(date=week.isoformat(), publisher=brand.locg_id)
+        await upsert_week(self.bot.db, brand.id, week, comics)
+        comic_dict = {c.id: c for c in comics}
+        self.bot.comics.setdefault(brand.id, {})[week] = comic_dict
+        self.sort_order(comic_dict, brand, week)
 
     def sort_order(self, comic_dict: Dict[int, ComicDetails], brand: Brand, week: dt.date):
         format_order = ["Comic", "Trade Paperback", "Hardcover"]
