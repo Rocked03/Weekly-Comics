@@ -521,7 +521,7 @@ class PullsCog(commands.Cog, name="Pulls"):
         return await interaction.followup.send(
             f"Set up the following feed in **this** channel ({channel.mention}). \n" +
             f"To edit the feed settings, use these commands: \n" +
-            " · ".join(cmd_ping(self.bot.cmds, f"editfeed {i}") for i in ['channel', 'format', 'day', 'ping', 'pin']),
+            " · ".join(cmd_ping(self.bot.cmds, f"editfeed {i}") for i in ['channel', 'format', 'day', 'ping', 'pin', 'formats']),
             embed=new_config.to_embed())
 
 
