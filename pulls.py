@@ -22,7 +22,7 @@ from funcs.postgresql import fetch_configs
 from objects.brand import Brands, BrandEnum, BrandAutocomplete, Marvel
 from objects.comic import Comic, ComicMessage
 from objects.configuration import Configuration, Format, config_from_record, format_autocomplete, \
-    WEEKDAYS, next_scheduled, Schedule
+    WEEKDAYS, next_scheduled, Schedule, schedule_autocomplete
 from objects.keywords import fetch_keywords
 from services.comic_releases import fetch_comic_releases_detailed, fetch_comic_releases, fetch_comic_details
 from services.week_cache import fetch_week, upsert_week
@@ -509,16 +509,21 @@ class PullsCog(commands.Cog, name="Pulls"):
             traceback.print_exc()
 
     @app_commands.command(name="comics-this-week")
-    @app_commands.choices(brand=BrandAutocomplete)
-    async def comics_this_week(self, interaction: Interaction, brand: str):
+    @app_commands.choices(brand=BrandAutocomplete, schedule=schedule_autocomplete)
+    @app_commands.describe(schedule="Preview a delayed digital schedule instead of this week's print releases.")
+    async def comics_this_week(self, interaction: Interaction, brand: str, schedule: str = None):
         """Lists this week's comics!"""
         await interaction.response.defer(
             ephemeral=not interaction.channel.permissions_for(interaction.user).embed_links)
         b = self.brands[brand]
 
-        week = week_anchor(utils.utcnow().date())
+        week = (target_week(Schedule(schedule), utils.utcnow().date()) if schedule
+                else week_anchor(utils.utcnow().date()))
         if week not in self.bot.comics.get(b.id, {}):
-            return await interaction.followup.send("Comics are not yet fetched.")
+            try:
+                await self.ensure_week(b, week)
+            except Exception:
+                return await interaction.followup.send("Could not fetch that week's comics. Try again shortly.")
 
         comics = self.bot.comics[b.id][week]
 
@@ -606,7 +611,7 @@ class PullsCog(commands.Cog, name="Pulls"):
         return await interaction.followup.send(
             f"Set up the following feed in **this** channel ({channel.mention}). \n" +
             f"To edit the feed settings, use these commands: \n" +
-            " · ".join(cmd_ping(self.bot.cmds, f"editfeed {i}") for i in ['channel', 'format', 'day', 'ping', 'pin', 'formats']),
+            " · ".join(cmd_ping(self.bot.cmds, f"editfeed {i}") for i in ['channel', 'format', 'day', 'ping', 'pin', 'formats', 'schedule']),
             embed=new_config.to_embed())
 
 
