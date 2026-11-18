@@ -319,8 +319,12 @@ class PullsCog(commands.Cog, name="Pulls"):
         """Fetch and cache a week on demand because a feed/command requested it."""
         if week in self.bot.comics.get(brand.id, {}):
             return
-        comics = await fetch_comic_releases_detailed(date=week.isoformat(), publisher=brand.locg_id)
-        await upsert_week(self.bot.db, brand.id, week, comics)
+        cached = await fetch_week(self.bot.db, brand.id, week)
+        if cached is not None:
+            comics = cached[0]
+        else:
+            comics = await fetch_comic_releases_detailed(date=week.isoformat(), publisher=brand.locg_id)
+            await upsert_week(self.bot.db, brand.id, week, comics)
         comic_dict = {c.id: c for c in comics}
         self.bot.comics.setdefault(brand.id, {})[week] = comic_dict
         self.sort_order(comic_dict, brand, week)

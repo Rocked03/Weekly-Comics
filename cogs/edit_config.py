@@ -228,9 +228,11 @@ class EditConfigCog(commands.Cog, name="Edit Configuration"):
                 c.__setattr__(a, v(c) if callable(v) else v)
             await c.edit_sql(self.bot.db)
 
-            if "day" in attributes:
-                self.cancel_feed(c)
-                self.schedule_feed(c)
+            if "day" in attributes or "schedule" in attributes:
+                pulls = self.bot.get_cog("Pulls")
+                if pulls is not None:
+                    pulls.cancel_feed(c)
+                    pulls.schedule_feed(c)
 
         return [f"Edited configuration(s): {', '.join(f'`{c.brand.name}`' for c in filtered)}"]
 
@@ -251,7 +253,9 @@ class EditConfigCog(commands.Cog, name="Edit Configuration"):
 
         await c.delete_from_sql(self.bot.db)
 
-        self.cancel_feed(c)
+        pulls = self.bot.get_cog("Pulls")
+        if pulls is not None:
+            pulls.cancel_feed(c)
 
         return await interaction.followup.send("**DELETED** the following feed:", embed=c.to_embed())
 
