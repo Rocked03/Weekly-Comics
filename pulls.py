@@ -4,7 +4,7 @@ import datetime as dt
 import random
 import traceback
 from asyncio import Task
-from typing import Dict, List, Any, Union, Tuple
+from typing import Dict, List, Any, Union, Tuple, Set
 
 from discord import Interaction, app_commands, utils, Activity, ActivityType, Forbidden, Embed, File, \
     TextChannel, Role
@@ -253,12 +253,15 @@ class PullsCog(commands.Cog, name="Pulls"):
 
         configs = [config_from_record(c) for c in await self.bot.db.fetch('SELECT * FROM configuration')]
         brand_ids = {b.id for b in self.brands}
-        needed = {live_week} | {target_week(c.schedule, today) for c in configs if c.brand.id in brand_ids}
+        weeks_by_brand: Dict[int, Set[dt.date]] = {b.id: {live_week} for b in self.brands}
+        for c in configs:
+            if c.brand.id in brand_ids:
+                weeks_by_brand[c.brand.id].add(target_week(c.schedule, today))
 
         for current_brand in self.brands:
             print(f" > Fetching {current_brand.name}")
             try:
-                for week in sorted(needed):
+                for week in sorted(weeks_by_brand[current_brand.id]):
                     comics = await fetch_comic_week(date=week.isoformat(), publisher=current_brand.locg_id)
                     comic_dict = {comic.id: comic for comic in comics}
                     self.bot.comics.setdefault(current_brand.id, {})[week] = comic_dict
