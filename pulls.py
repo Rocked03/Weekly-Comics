@@ -12,9 +12,10 @@ from discord.app_commands import checks
 from discord.ext import commands
 
 from comic_types.brand import Brand
-from comic_types.locg import ComicDetails
+from comic_types.locg import ComicDetails, ComicData, ComicRequest
 from config import ADMIN_GUILD_IDS
-from funcs.utils import f_date, week_of_date, is_owner
+from funcs.utils import f_date, week_of_date, is_owner, from_dict
+from funcs.weeks import week_anchor
 from funcs.discord_functions import on_app_command_error, cmd_ping, pin, profile_pic
 from funcs.pull_functions import validate_config_accessibility, summary_embed
 from funcs.postgresql import fetch_configs
@@ -33,8 +34,8 @@ class PullsCog(commands.Cog, name="Pulls"):
 
         self.brands = Brands()
 
-        self.bot.comics: Dict[str, Dict[int, Comic]] = {}
-        self.bot.order: Dict[str, List[int]] = {b.id: [] for b in self.brands}
+        self.bot.comics: Dict[str, Dict[dt.date, Dict[int, Comic]]] = {}
+        self.bot.order: Dict[str, Dict[dt.date, List[int]]] = {b.id: {} for b in self.brands}
 
         self.access_lock = asyncio.Lock()
         self.locks: Dict[int, asyncio.Lock] = {}
@@ -43,6 +44,12 @@ class PullsCog(commands.Cog, name="Pulls"):
 
         self.feed_schedules: Dict[(int, str), Task] = {}
         self.bot.loop.create_task(self.on_startup_scheduler())
+
+    def current_week_comics(self, brand_id: str) -> List[Comic]:
+        weeks = self.bot.comics.get(brand_id, {})
+        if not weeks:
+            return []
+        return list(weeks[max(weeks)].values())
 
     async def check_lock(self, id_: int):
         async with self.access_lock:
@@ -95,8 +102,8 @@ class PullsCog(commands.Cog, name="Pulls"):
 
             try:
                 await profile_pic(
-                    list(self.bot.comics[BrandEnum.Marvel.value].values()),
-                    list(self.bot.comics[BrandEnum.DC.value].values()),
+                    self.current_week_comics(BrandEnum.Marvel.value),
+                    self.current_week_comics(BrandEnum.DC.value),
                     self.bot)
             except Exception as e:
                 print(f"Error while updating profile picture: {e}")
@@ -109,8 +116,8 @@ class PullsCog(commands.Cog, name="Pulls"):
 
         while not self.bot.is_closed():
             comics = []
-            for v in self.bot.comics.values():
-                comics += [i.title for i in v.values()]
+            for bid in self.bot.comics:
+                comics += [i.title for i in self.current_week_comics(bid)]
 
             title = random.choice(comics)
             a = Activity(type=ActivityType.watching, name=f"📖 {title}")
@@ -240,28 +247,29 @@ class PullsCog(commands.Cog, name="Pulls"):
     async def fetch_comics(self):
         print(f"~~ Fetching comics ~~   {utils.utcnow()}")
         self.bot.comics = {}
-        self.bot.order = {}
+
+        live_week = week_anchor(utils.utcnow().date())
 
         for current_brand in self.brands:
             print(f" > Fetching {current_brand.name}")
             try:
                 comics = await fetch_comic_releases_detailed(publisher=current_brand.locg_id)
                 comic_dict = {comic.id: comic for comic in comics}
-                self.bot.comics[current_brand.id] = comic_dict
-                self.sort_order(comic_dict, current_brand)
+                self.bot.comics.setdefault(current_brand.id, {})[live_week] = comic_dict
+                self.sort_order(comic_dict, current_brand, live_week)
                 date = week_of_date(comics)
                 print(
-                    f"   > {len(self.bot.comics[current_brand.id])} loaded for the week of {f_date(date)} ")
+                    f"   > {len(self.bot.comics[current_brand.id][live_week])} loaded for the week of {f_date(date)} ")
             except Exception as e:
                 print(f"   ! Error fetching {current_brand.name} comics: {e}")
                 traceback.print_exc()
 
         print(f"~~ Comics fetched ~~   {utils.utcnow()}")
 
-    def sort_order(self, comic_dict: Dict[int, ComicDetails], brand: Brand):
+    def sort_order(self, comic_dict: Dict[int, ComicDetails], brand: Brand, week: dt.date):
         format_order = ["Comic", "Trade Paperback", "Hardcover"]
 
-        self.bot.order[brand.id] = sorted(
+        self.bot.order.setdefault(brand.id, {})[week] = sorted(
             comic_dict.keys(),
             key=lambda x: (
                 format_order.index(comic_dict[x].format) if comic_dict[x].format in format_order else len(format_order),
@@ -280,7 +288,8 @@ class PullsCog(commands.Cog, name="Pulls"):
                 print(f"Channel {config.channel_id} not found for {config.brand.name} feed in {config.server_id}.")
                 return
 
-            comics: Dict[int, Union[Comic, ComicMessage]] = self.bot.comics[config.brand.id].copy()
+            week = week_anchor(utils.utcnow().date())
+            comics: Dict[int, Union[Comic, ComicMessage]] = self.bot.comics[config.brand.id][week].copy()
 
             if config.disabled_formats:
                 comics = {k: v for k, v in comics.items() if v.format not in config.disabled_formats}
@@ -307,7 +316,7 @@ class PullsCog(commands.Cog, name="Pulls"):
 
                         instances = {}
 
-                        for cid in self.bot.order[config.brand.id]:
+                        for cid in self.bot.order[config.brand.id][week]:
                             if cid in comics:
                                 try:
                                     msg = await channel.send(embed=embeds[cid])
@@ -317,7 +326,7 @@ class PullsCog(commands.Cog, name="Pulls"):
 
                         comics = instances
 
-                    summary_embeds = await summary_embed(self.bot.order, comics, config.brand, lead_msg)
+                    summary_embeds = await summary_embed(self.bot.order[config.brand.id][week], comics, config.brand, lead_msg)
 
                     embed_selection: List[Embed] = []
                     first_msg = None
@@ -408,8 +417,8 @@ class PullsCog(commands.Cog, name="Pulls"):
             return await interaction.followup.send("Comics are not yet fetched.")
 
         img = await profile_pic(
-                    list(self.bot.comics[BrandEnum.Marvel.value].values()),
-                    list(self.bot.comics[BrandEnum.DC.value].values()),
+                    self.current_week_comics(BrandEnum.Marvel.value),
+                    self.current_week_comics(BrandEnum.DC.value),
                     self.bot)
         await interaction.followup.send(file=File(fp=img, filename="my_file.png"))
 
@@ -437,10 +446,11 @@ class PullsCog(commands.Cog, name="Pulls"):
             ephemeral=not interaction.channel.permissions_for(interaction.user).embed_links)
         b = self.brands[brand]
 
-        if b.id not in self.bot.comics:
+        week = week_anchor(utils.utcnow().date())
+        if week not in self.bot.comics.get(b.id, {}):
             return await interaction.followup.send("Comics are not yet fetched.")
 
-        comics = self.bot.comics[b.id]
+        comics = self.bot.comics[b.id][week]
 
         con = await self.bot.db.fetch(
             'SELECT * FROM configuration WHERE server = $1 and brand = $2',
@@ -455,7 +465,7 @@ class PullsCog(commands.Cog, name="Pulls"):
                 kw = await fetch_keywords(self.bot.db, config.server_id)
                 comics = {k: v for k, v in comics.items() if kw.check_comic(v)}
 
-        embeds = await summary_embed(self.bot.order, comics, b)
+        embeds = await summary_embed(self.bot.order[b.id][week], comics, b)
         await interaction.followup.send(embeds=embeds)
 
     @app_commands.command(name="trigger-feed")
