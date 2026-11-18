@@ -282,6 +282,9 @@ class PullsCog(commands.Cog, name="Pulls"):
 
             comics: Dict[int, Union[Comic, ComicMessage]] = self.bot.comics[config.brand.id].copy()
 
+            if config.disabled_formats:
+                comics = {k: v for k, v in comics.items() if v.format not in config.disabled_formats}
+
             if config.check_keywords:
                 kw = await fetch_keywords(self.bot.db, config.server_id)
                 comics = {k: v for k, v in comics.items() if kw.check_comic(v)}
@@ -446,6 +449,8 @@ class PullsCog(commands.Cog, name="Pulls"):
 
         if con:
             config = config_from_record(con[0])
+            if config.disabled_formats:
+                comics = {k: v for k, v in comics.items() if v.format not in config.disabled_formats}
             if config.check_keywords:
                 kw = await fetch_keywords(self.bot.db, config.server_id)
                 comics = {k: v for k, v in comics.items() if kw.check_comic(v)}
@@ -521,7 +526,7 @@ class PullsCog(commands.Cog, name="Pulls"):
         return await interaction.followup.send(
             f"Set up the following feed in **this** channel ({channel.mention}). \n" +
             f"To edit the feed settings, use these commands: \n" +
-            " · ".join(cmd_ping(self.bot.cmds, f"editfeed {i}") for i in ['channel', 'format', 'day', 'ping', 'pin']),
+            " · ".join(cmd_ping(self.bot.cmds, f"editfeed {i}") for i in ['channel', 'format', 'day', 'ping', 'pin', 'formats']),
             embed=new_config.to_embed())
 
 
