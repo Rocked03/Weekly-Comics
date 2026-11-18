@@ -9,6 +9,13 @@ from objects.comic import ComicMessage, Comic
 from objects.configuration import Configuration
 
 
+def clamp(text: str, limit: int) -> str:
+    """Truncate text to limit, replacing the final character with an ellipsis if needed."""
+    if len(text) <= limit:
+        return text
+    return text[:limit - 1] + "…"
+
+
 async def validate_config_accessibility(bot: Bot, config: Configuration) -> Tuple[bool, str]:
     """
     Check if the bot can access and send messages to a configuration's channel.
@@ -52,7 +59,12 @@ async def summary_embed(
 
         info = []
         if comic.writer:
-            info.append(f"{comic.writer}")
+            suffix = f" · [More]({comic.more})" if comic.url else ""
+            limit = 1024 - len(suffix)
+            writer = clamp(comic.writer, limit)
+            if len(writer) < len(comic.writer):
+                print(f"[Pull] Clamped field for '{comic.title}' ({len(comic.writer)} -> {limit})")
+            info.append(writer)
         if comic.url:
             info.append(f"[More]({comic.more})")
         info_text = " · ".join(info) if info else "···"
@@ -65,7 +77,10 @@ async def summary_embed(
             currently_issues = comic.format == "Comic"
             n = 0
 
-        embed.add_field(name=comic.title,
+        title = clamp(comic.title, 256)
+        if len(title) < len(comic.title):
+            print(f"[Pull] Clamped field for '{comic.title}' ({len(comic.title)} -> 256)")
+        embed.add_field(name=title,
                         value=info_text,
                         inline=True)
         n += 1
