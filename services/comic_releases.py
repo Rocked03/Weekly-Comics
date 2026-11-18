@@ -105,3 +105,21 @@ async def fetch_comic_releases_detailed(
         ) for comic in releases
     ])
     return [Comic(**from_dict(ComicDetails, detail.__dict__).__dict__) for detail in details]
+
+
+async def fetch_comic_week(date: str, publisher: int) -> list[Comic]:
+    """
+    Fetches one week's fully-detailed comics from the api's week endpoint.
+    """
+    url = f"{API_URL}/comic/week"
+    params: Dict[str, Any] = {"date": date, "publisher": publisher}
+    async with aiohttp.ClientSession() as session:
+        async with session.get(url, params=params) as resp:
+            resp.raise_for_status()
+            data = await resp.json()
+            results = []
+            for item in data["comics"]:
+                if 'releaseDate' in item and item['releaseDate']:
+                    item['releaseDate'] = datetime.fromisoformat(item['releaseDate'].replace('Z', '')).date()
+                results.append(Comic(**from_dict(ComicDetails, item).__dict__))
+            return results
