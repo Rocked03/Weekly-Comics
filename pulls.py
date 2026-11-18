@@ -282,6 +282,9 @@ class PullsCog(commands.Cog, name="Pulls"):
 
             comics: Dict[int, Union[Comic, ComicMessage]] = self.bot.comics[config.brand.id].copy()
 
+            if config.disabled_formats:
+                comics = {k: v for k, v in comics.items() if v.format not in config.disabled_formats}
+
             if config.check_keywords:
                 kw = await fetch_keywords(self.bot.db, config.server_id)
                 comics = {k: v for k, v in comics.items() if kw.check_comic(v)}
@@ -446,6 +449,8 @@ class PullsCog(commands.Cog, name="Pulls"):
 
         if con:
             config = config_from_record(con[0])
+            if config.disabled_formats:
+                comics = {k: v for k, v in comics.items() if v.format not in config.disabled_formats}
             if config.check_keywords:
                 kw = await fetch_keywords(self.bot.db, config.server_id)
                 comics = {k: v for k, v in comics.items() if kw.check_comic(v)}

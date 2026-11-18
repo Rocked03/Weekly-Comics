@@ -49,7 +49,13 @@ def f_date(date: dt.date):
 
 
 def week_of_date(comics: List[ComicDetails]) -> dt.date:
-    return min(c.releaseDate for c in comics if c.format == "Comic") if comics else dt.date.today()
+    comics = list(comics)
+    if not comics:
+        return dt.date.today()
+    issues = [c.releaseDate for c in comics if c.format == "Comic"]
+    if issues:
+        return min(issues)
+    return min(c.releaseDate for c in comics)
 
 
 def is_owner(interaction: Interaction) -> bool:
