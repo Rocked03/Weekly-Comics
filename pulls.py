@@ -347,7 +347,14 @@ class PullsCog(commands.Cog, name="Pulls"):
                 print(f"Channel {config.channel_id} not found for {config.brand.name} feed in {config.server_id}.")
                 return
 
-            week = week_anchor(utils.utcnow().date())
+            week = target_week(config.schedule, utils.utcnow().date())
+            if week not in self.bot.comics.get(config.brand.id, {}):
+                try:
+                    await self.ensure_week(config.brand, week)
+                except Exception as e:
+                    print(f"[Pull Feed] ({config.server_id}, {config.brand.name}) "
+                          f"Failed to load week {week.isoformat()}: {e}")
+                    return
             comics: Dict[int, Union[Comic, ComicMessage]] = self.bot.comics[config.brand.id][week].copy()
 
             if config.disabled_formats:
@@ -362,7 +369,11 @@ class PullsCog(commands.Cog, name="Pulls"):
                     lead_msg = None
                     if _format in [Format.FULL, Format.COMPACT]:
                         date = week_of_date(list(comics.values()))
-                        lead_msg = await channel.send(f"## {config.brand.name} Comics - {f_date(date)}")
+                        if config.schedule is Schedule.PRINT:
+                            header = f"## {config.brand.name} Comics - {f_date(date)}"
+                        else:
+                            header = f"## {config.brand.name} Comics - print week of {f_date(date)}"
+                        lead_msg = await channel.send(header)
                         if config.pin:
                             await pin(self.bot.user.id, lead_msg)
                         if channel.guild.id == 281648235557421056: print("finished pin")
