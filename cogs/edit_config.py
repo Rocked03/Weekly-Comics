@@ -7,7 +7,7 @@ from discord.ext import commands
 from funcs.discord_functions import cmd_ping
 from funcs.postgresql import fetch_configs
 from objects.brand import BrandAutocomplete, Brands
-from objects.configuration import format_autocomplete, WEEKDAYS, Format
+from objects.configuration import format_autocomplete, WEEKDAYS, Format, COMIC_FORMATS
 
 
 class EditConfigCog(commands.Cog, name="Edit Configuration"):
@@ -146,6 +146,49 @@ class EditConfigCog(commands.Cog, name="Edit Configuration"):
             txt.append("Enabled keyword filter." if keywords else "Disabled keyword filter.")
             await interaction.followup.send('\n'.join(txt))
 
+    @edit_group.command(name="formats")
+    @checks.has_permissions(manage_guild=True)
+    @app_commands.describe(
+        comic="Show or hide single-issue comics.",
+        annual="Show or hide annuals.",
+        digital_chapter="Show or hide digital chapters.",
+        trade="Show or hide trade paperbacks.",
+        hardcover="Show or hide hardcovers.",
+        brand="The brand feed to edit. Leave empty to edit all feed configurations."
+    )
+    @app_commands.choices(brand=BrandAutocomplete)
+    async def config_formats(self, interaction: Interaction, comic: bool = None, annual: bool = None,
+                             digital_chapter: bool = None, trade: bool = None, hardcover: bool = None,
+                             brand: str = None):
+        """Shows or hides comic formats in the feed. Omitted formats are unchanged."""
+        await interaction.response.defer()
+
+        toggles = {
+            'Comic': comic,
+            'Annual': annual,
+            'Digital Chapter': digital_chapter,
+            'Trade Paperback': trade,
+            'Hardcover': hardcover,
+        }
+        if all(v is None for v in toggles.values()):
+            return await interaction.followup.send("Provide at least one format to show or hide.")
+
+        def new_disabled(c):
+            disabled = set(c.disabled_formats)
+            for fmt, value in toggles.items():
+                if value is None:
+                    continue
+                disabled.discard(fmt)
+                if not value:
+                    disabled.add(fmt)
+            return sorted(disabled)
+
+        txt = await self.edit_config(interaction, brand, {'disabled_formats': new_disabled})
+        if txt:
+            changes = "; ".join(f"{'Show' if v else 'Hide'} {k}" for k, v in toggles.items() if v is not None)
+            txt.append(changes)
+            await interaction.followup.send('\n'.join(txt))
+
     async def edit_config(self, interaction: Interaction, brand: str, attributes: Dict[str, Any]):
         b = self.brands[brand] if brand else None
 
@@ -161,7 +204,7 @@ class EditConfigCog(commands.Cog, name="Edit Configuration"):
 
         for c in filtered:
             for a, v in attributes.items():
-                c.__setattr__(a, v)
+                c.__setattr__(a, v(c) if callable(v) else v)
             await c.edit_sql(self.bot.db)
 
             if "day" in attributes:
