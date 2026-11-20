@@ -309,17 +309,18 @@ def _save_callback(view: EditorView, state: EditorState, bot: Optional[commands.
 
 def _delete_callback(view: EditorView, state: EditorState, bot: Optional[commands.Bot]):
     async def callback(interaction: Interaction):
-        await interaction.response.send_modal(DeleteFeedModal(state, bot, Brands()[state.brand_id]))
+        await interaction.response.send_modal(DeleteFeedModal(state, bot, Brands()[state.brand_id], view))
 
     return callback
 
 
 class DeleteFeedModal(Modal):
-    def __init__(self, state: EditorState, bot: Optional[commands.Bot], brand: Brand):
+    def __init__(self, state: EditorState, bot: Optional[commands.Bot], brand: Brand, view: EditorView):
         super().__init__(title=f'Delete {brand.name} Feed')
         self.state = state
         self.bot: Any = bot
         self.brand = brand
+        self.view = view
         self.confirm = TextInput(label=f'Type "{brand.name}" to confirm', style=TextStyle.short, max_length=32)
         self.add_item(self.confirm)
 
@@ -347,7 +348,9 @@ class DeleteFeedModal(Modal):
         self.state.status = None
         if self.state.configs:
             self.state.brand_id = sorted(self.state.configs)[0]
+            self.view.stop()
             await modal_interaction.response.edit_message(view=build_editor_view(self.state, self.bot))
         else:
+            self.view.stop()
             await modal_interaction.response.edit_message(
                 view=notice_view('No feeds left in this server — use /setup to create one.'))
