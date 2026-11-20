@@ -100,7 +100,8 @@ class UtilityCog(commands.Cog, name="Utility"):
 
         embeds = []
 
-        comics = list(self.bot.comics[Marvel().id].values())
+        weeks = self.bot.comics.get(Marvel().id, {})
+        comics = list(weeks[max(weeks)].values()) if weeks else []
         samples = random.sample(comics, len(comics) if 4 > len(comics) else 4)
 
         meddle: Comic = copy.copy(random.choice(samples))
@@ -123,7 +124,10 @@ class UtilityCog(commands.Cog, name="Utility"):
                              "Also followed by the 'Summary' embed."
         embeds.append(meddle.to_embed(False))
 
-        summaries = await summary_embed(self.bot.order, {i.id: i for i in samples}, self.brands.Marvel)
+        sample_ids = {i.id for i in samples}
+        summaries = await summary_embed(
+            [cid for cid in self.bot.order[Marvel().id][max(weeks)] if cid in sample_ids],
+            {i.id: i for i in samples}, self.brands.Marvel)
         summ = summaries[0]
         summ.title = "Summary Format"
         summ.insert_field_at(0, name="This displays all comics",

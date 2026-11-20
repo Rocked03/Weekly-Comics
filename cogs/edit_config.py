@@ -7,7 +7,8 @@ from discord.ext import commands
 from funcs.discord_functions import cmd_ping
 from funcs.postgresql import fetch_configs
 from objects.brand import BrandAutocomplete, Brands
-from objects.configuration import format_autocomplete, WEEKDAYS, Format, COMIC_FORMATS
+from objects.configuration import format_autocomplete, WEEKDAYS, Format, COMIC_FORMATS, \
+    Schedule, schedule_autocomplete, SCHEDULE_LABELS
 
 
 class EditConfigCog(commands.Cog, name="Edit Configuration"):
@@ -189,6 +190,26 @@ class EditConfigCog(commands.Cog, name="Edit Configuration"):
             txt.append(changes)
             await interaction.followup.send('\n'.join(txt))
 
+    @edit_group.command(name="schedule")
+    @checks.has_permissions(manage_guild=True)
+    @app_commands.describe(
+        schedule="Print, or a delayed digital schedule (1, 3 or 6 months after print).",
+        brand="The brand feed to set. Leave empty to edit all feed configurations."
+    )
+    @app_commands.choices(
+        brand=BrandAutocomplete,
+        schedule=schedule_autocomplete
+    )
+    async def config_schedule(self, interaction: Interaction, schedule: str, brand: str = None):
+        """Sets which release schedule the feed targets (print or delayed digital)."""
+        await interaction.response.defer()
+
+        s = Schedule(schedule)
+        txt = await self.edit_config(interaction, brand, {'schedule': s})
+        if txt:
+            txt.append(f"Set schedule to: {SCHEDULE_LABELS[s.value]}")
+            await interaction.followup.send('\n'.join(txt))
+
     async def edit_config(self, interaction: Interaction, brand: str, attributes: Dict[str, Any]):
         b = self.brands[brand] if brand else None
 
@@ -207,9 +228,11 @@ class EditConfigCog(commands.Cog, name="Edit Configuration"):
                 c.__setattr__(a, v(c) if callable(v) else v)
             await c.edit_sql(self.bot.db)
 
-            if "day" in attributes:
-                self.cancel_feed(c)
-                self.schedule_feed(c)
+            if "day" in attributes or "schedule" in attributes:
+                pulls = self.bot.get_cog("Pulls")
+                if pulls is not None:
+                    pulls.cancel_feed(c)
+                    pulls.schedule_feed(c)
 
         return [f"Edited configuration(s): {', '.join(f'`{c.brand.name}`' for c in filtered)}"]
 
@@ -230,7 +253,9 @@ class EditConfigCog(commands.Cog, name="Edit Configuration"):
 
         await c.delete_from_sql(self.bot.db)
 
-        self.cancel_feed(c)
+        pulls = self.bot.get_cog("Pulls")
+        if pulls is not None:
+            pulls.cancel_feed(c)
 
         return await interaction.followup.send("**DELETED** the following feed:", embed=c.to_embed())
 

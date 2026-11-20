@@ -93,3 +93,4 @@ class ComicDetails:
     stories: List[Story]
     previousIssueUrl: Optional[str] = None
     nextIssueUrl: Optional[str] = None
+    synthesized: bool = False

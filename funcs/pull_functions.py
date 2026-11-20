@@ -41,7 +41,7 @@ async def validate_config_accessibility(bot: Bot, config: Configuration) -> Tupl
 
 
 async def summary_embed(
-        order: dict[str, list[int]],
+        order: list[int],
         comics: Dict[int, Union[Comic, ComicMessage]],
         brand: Brand,
         start: Message = None):
@@ -51,7 +51,7 @@ async def summary_embed(
     embed = empty_embed.copy()
     currently_issues = True
     n = 0
-    for cid in order[brand.id]:
+    for cid in order:
         if cid not in comics:
             continue
 

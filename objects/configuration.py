@@ -27,6 +27,23 @@ format_autocomplete = [
 ]
 
 
+class Schedule(Enum):
+    PRINT = "PRINT"
+    DIGITAL_1M = "DIGITAL_1M"
+    DIGITAL_3M = "DIGITAL_3M"
+    DIGITAL_6M = "DIGITAL_6M"
+
+
+schedule_autocomplete = [
+    app_commands.Choice(name='Print', value='PRINT'),
+    app_commands.Choice(name='Digital +1 Month', value='DIGITAL_1M'),
+    app_commands.Choice(name='Digital +3 Months', value='DIGITAL_3M'),
+    app_commands.Choice(name='Digital +6 Months', value='DIGITAL_6M'),
+]
+
+SCHEDULE_LABELS = {c.value: c.name for c in schedule_autocomplete}
+
+
 class Configuration:
     def __init__(self,
                  server_id: int,
@@ -37,7 +54,8 @@ class Configuration:
                  ping: int = None,
                  pin: bool = False,
                  check_keywords: bool = False,
-                 disabled_formats: List[str] = None
+                 disabled_formats: List[str] = None,
+                 schedule: Schedule = Schedule.PRINT
                  ):
         self.server_id = server_id
         self.channel_id = channel_id
@@ -48,6 +66,7 @@ class Configuration:
         self.pin = pin
         self.check_keywords = check_keywords
         self.disabled_formats = disabled_formats if disabled_formats is not None else []
+        self.schedule = schedule
 
     def to_embed(self):
         embed = discord.Embed(
@@ -61,26 +80,28 @@ class Configuration:
         embed.add_field(name="Channel Pin", value="Enabled" if self.pin else "Disabled")
         enabled_formats = [f for f in COMIC_FORMATS if f not in self.disabled_formats]
         embed.add_field(name="Formats", value=", ".join(enabled_formats) if enabled_formats else "None")
+        embed.add_field(name="Schedule", value=SCHEDULE_LABELS[self.schedule.value])
         embed.set_footer(text=f"{self.server_id} · {self.brand.name}")
         return embed
 
     async def upload_to_sql(self, db: Pool):
         await db.execute(
             "INSERT INTO configuration " +
-            "(server, brand, format, channel, day, ping, pin, check_key, disabled_formats) " +
-            "VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)",
+            "(server, brand, format, channel, day, ping, pin, check_key, disabled_formats, schedule) " +
+            "VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)",
             self.server_id, self.brand.id, self.format.name, self.channel_id, self.day, self.ping, self.pin,
-            self.check_keywords, self.disabled_formats
+            self.check_keywords, self.disabled_formats, self.schedule.value
         )
 
     async def edit_sql(self, db: Pool):
         await db.execute(
             "UPDATE configuration " +
-            "SET format = $3, channel = $4, day = $5, ping = $6, pin = $7, check_key = $8, disabled_formats = $9 " +
+            "SET format = $3, channel = $4, day = $5, ping = $6, pin = $7, check_key = $8, " +
+            "disabled_formats = $9, schedule = $10 " +
             "WHERE (server = $1 AND brand = $2)",
             self.server_id, self.brand.id,
             self.format.name, self.channel_id, self.day, self.ping, self.pin, self.check_keywords,
-            self.disabled_formats
+            self.disabled_formats, self.schedule.value
         )
 
     async def delete_from_sql(self, db: Pool):
@@ -100,7 +121,8 @@ def config_from_record(record: Record):
         ping=record['ping'],
         pin=record['pin'],
         check_keywords=record['check_key'],
-        disabled_formats=record['disabled_formats']
+        disabled_formats=record['disabled_formats'],
+        schedule=Schedule(record['schedule'])
     )
 
 
