@@ -145,8 +145,7 @@ def _format_select(view, state, bot, vals) -> StringSelect:
 
 def _day_select(view, state, bot, vals) -> StringSelect:
     s = StringSelect(custom_id='editor:day', placeholder='Post day',
-                     options=[SelectOption(label=d, value=str(n), default=n == vals['day'],
-                                           description=f'Next: <t:{int(next_scheduled(n).timestamp())}:D>')
+                     options=[SelectOption(label=d, value=str(n), default=n == vals['day'])
                               for n, d in enumerate(WEEKDAYS)])
     s.callback = _stage_callback(view, state, bot, 'day', lambda v: int(v[0]), s)
     return s
@@ -187,6 +186,10 @@ def _schedule_select(view, state, bot, vals) -> StringSelect:
     return s
 
 
+def _label(text: str) -> TextDisplay:
+    return TextDisplay(f'-# {text}')
+
+
 def build_editor_view(state: EditorState, bot: Optional[commands.Bot]) -> EditorView:
     brands = Brands()
     brand = brands[state.brand_id]
@@ -199,8 +202,7 @@ def build_editor_view(state: EditorState, bot: Optional[commands.Bot]) -> Editor
 
     verb = 'first' if creating else 'next'
     title = f'## New {brand.name} Feed' if creating else f'## {brand.name} Feed Configuration'
-    summary = (f'Posting in <#{vals["channel_id"]}> · {verb} post '
-               f'<t:{int(next_scheduled(vals["day"]).timestamp())}:D> · {SCHEDULE_LABELS[vals["schedule"].value]}')
+    summary = f'Posting in <#{vals["channel_id"]}> · {SCHEDULE_LABELS[vals["schedule"].value]}'
     header = '\n'.join([title, summary] + ([f'-# {state.status}'] if state.status else []))
     container.add_item(TextDisplay(header))
 
@@ -213,19 +215,30 @@ def build_editor_view(state: EditorState, bot: Optional[commands.Bot]) -> Editor
     brand_select = StringSelect(custom_id='editor:brand', placeholder='Feed', options=brand_options,
                                 disabled=(not creating and bool(changed)))
     brand_select.callback = _brand_callback(view, state, bot, brand_select)
+    container.add_item(_label('Feed'))
     container.add_item(ActionRow(brand_select))
 
     container.add_item(Separator())
 
+    container.add_item(_label('Channel'))
     container.add_item(ActionRow(_channel_select(view, state, bot, vals)))
+    container.add_item(_label('Feed format'))
     container.add_item(ActionRow(_format_select(view, state, bot, vals)))
+    container.add_item(_label('Post day'))
     container.add_item(ActionRow(_day_select(view, state, bot, vals)))
+    container.add_item(TextDisplay(
+        f'-# {verb.capitalize()} post: <t:{int(next_scheduled(vals["day"]).timestamp())}:D>'))
+    container.add_item(_label('Ping role'))
     container.add_item(ActionRow(_ping_select(view, state, bot, vals)))
+    container.add_item(_label('Pin weekly post'))
     container.add_item(ActionRow(_toggle_select(view, state, bot, 'pin', 'editor:pin', 'Pin weekly post',
                                                 vals['pin'])))
+    container.add_item(_label('Keyword filter'))
     container.add_item(ActionRow(_toggle_select(view, state, bot, 'check_keywords', 'editor:keywords',
                                                 'Filter by /keywords', vals['check_keywords'])))
+    container.add_item(_label('Comic formats'))
     container.add_item(ActionRow(_formats_select(view, state, bot, vals)))
+    container.add_item(_label('Schedule'))
     container.add_item(ActionRow(_schedule_select(view, state, bot, vals)))
 
     container.add_item(Separator())
