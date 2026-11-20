@@ -234,11 +234,11 @@ def build_editor_view(state: EditorState, bot: Optional[commands.Bot]) -> Editor
 
     save = Button(label='Save', style=ButtonStyle.green, custom_id='editor:save',
                   disabled=(not creating and not changed))
-    save.callback = _save_callback(view, state, bot)  # noqa: F821  (defined in Task 3; placeholder below until then)
+    save.callback = _save_callback(view, state, bot)
     row = ActionRow(save)
     if not creating:
         delete = Button(label='Delete Feed', style=ButtonStyle.red, custom_id='editor:delete')
-        delete.callback = _delete_callback(view, state, bot)  # noqa: F821  (defined in Task 3)
+        delete.callback = _delete_callback(view, state, bot)
         row.add_item(delete)
     container.add_item(row)
 
@@ -246,16 +246,108 @@ def build_editor_view(state: EditorState, bot: Optional[commands.Bot]) -> Editor
     return view
 
 
-# Temporary placeholders — replaced by save/delete orchestration.
-def _save_callback(view, state, bot):
+async def _update_feed(state: EditorState, bot: Any):
+    """Apply staged changes to the selected existing feed (one UPDATE, reschedule if needed)."""
+    config = state.configs[state.brand_id]
+    changed = {k: state.changes[k] for k in changed_keys(state)}
+    if not changed:
+        return
+    snapshot = {k: getattr(config, k) for k in changed}
+    try:
+        for k, v in changed.items():
+            setattr(config, k, v)
+        await config.edit_sql(bot.db)
+    except Exception:
+        for k, v in snapshot.items():  # roll back the in-memory object on DB failure
+            setattr(config, k, v)
+        raise
+    if 'day' in changed or 'schedule' in changed:
+        pulls = bot.get_cog('Pulls')
+        if pulls is not None:
+            pulls.cancel_feed(config)
+            pulls.schedule_feed(config)
+    state.changes = {}
+
+
+async def _create_feed(state: EditorState, bot: Any):
+    """Create the configured feed and flip the session into edit mode."""
+    brand = Brands()[state.brand_id]
+    vals = effective_values(state)
+    config = Configuration(
+        state.guild_id, vals['channel_id'], brand=brand,
+        _format=vals['format'], day=vals['day'], ping=vals['ping'], pin=vals['pin'],
+        check_keywords=vals['check_keywords'], disabled_formats=vals['disabled_formats'],
+        schedule=vals['schedule'])
+    await config.upload_to_sql(bot.db)
+    state.default_channel_id = None
+    state.configs[brand.id] = config
+    state.changes = {}
+    pulls = bot.get_cog('Pulls')
+    if pulls is not None:
+        pulls.schedule_feed(config)
+
+
+def _save_callback(view: EditorView, state: EditorState, bot: Optional[commands.Bot]):
     async def callback(interaction: Interaction):
-        pass
+        if state.creating:
+            verb = '✓ Feed created'
+        else:
+            verb = '✓ Saved'
+        try:
+            if state.creating:
+                await _create_feed(state, bot)
+            else:
+                await _update_feed(state, bot)
+        except Exception:
+            state.status = '⚠ Save failed — your changes are still staged, try again.'
+            return await _rerender(view, interaction, state, bot)
+        state.status = f'{verb} {utils.utcnow().strftime("%H:%M UTC")}'
+        await _rerender(view, interaction, state, bot)
 
     return callback
 
 
-def _delete_callback(view, state, bot):
+def _delete_callback(view: EditorView, state: EditorState, bot: Optional[commands.Bot]):
     async def callback(interaction: Interaction):
-        pass
+        await interaction.response.send_modal(DeleteFeedModal(state, bot, Brands()[state.brand_id]))
 
     return callback
+
+
+class DeleteFeedModal(Modal):
+    def __init__(self, state: EditorState, bot: Optional[commands.Bot], brand: Brand):
+        super().__init__(title=f'Delete {brand.name} Feed')
+        self.state = state
+        self.bot: Any = bot
+        self.brand = brand
+        self.confirm = TextInput(label=f'Type "{brand.name}" to confirm', style=TextStyle.short, max_length=32)
+        self.add_item(self.confirm)
+
+    async def on_submit(self, modal_interaction: Interaction):
+        if self.confirm.value.strip().lower() != self.brand.name.lower():
+            await modal_interaction.response.send_message(
+                'Confirmation text did not match — the feed was not deleted.', ephemeral=True)
+            return
+        config = self.state.configs.get(self.brand.id)
+        try:
+            if config is not None:
+                await config.delete_from_sql(self.bot.db)
+        except Exception:
+            await modal_interaction.response.send_message(
+                'Delete failed — try again.', ephemeral=True)
+            return
+        pulls = self.bot.get_cog('Pulls')
+        if pulls is not None and config is not None:
+            try:
+                pulls.cancel_feed(config)
+            except KeyError:
+                pass
+        self.state.configs.pop(self.brand.id, None)
+        self.state.changes = {}
+        self.state.status = None
+        if self.state.configs:
+            self.state.brand_id = sorted(self.state.configs)[0]
+            await modal_interaction.response.edit_message(view=build_editor_view(self.state, self.bot))
+        else:
+            await modal_interaction.response.edit_message(
+                view=notice_view('No feeds left in this server — use /setup to create one.'))
