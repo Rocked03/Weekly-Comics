@@ -7,7 +7,7 @@ from asyncio import Task
 from typing import Dict, List, Any, Union, Tuple, Set
 
 from discord import Interaction, app_commands, utils, Activity, ActivityType, Forbidden, Embed, File, \
-    TextChannel, Role
+    Role
 from discord.app_commands import checks
 from discord.ext import commands
 
@@ -21,7 +21,8 @@ from funcs.pull_functions import validate_config_accessibility, summary_embed
 from funcs.postgresql import fetch_configs
 from objects.brand import Brands, BrandEnum, BrandAutocomplete, Marvel
 from objects.comic import Comic, ComicMessage
-from objects.configuration import Configuration, Format, config_from_record, format_autocomplete, \
+from objects.config_editor import EditorState, build_editor_view
+from objects.configuration import Configuration, Format, config_from_record, \
     WEEKDAYS, next_scheduled, Schedule, schedule_autocomplete
 from objects.keywords import fetch_keywords
 from services.comic_releases import fetch_comic_week
@@ -532,46 +533,22 @@ class PullsCog(commands.Cog, name="Pulls"):
 
     @app_commands.command(name="setup")
     @checks.has_permissions(manage_guild=True)
-    @app_commands.describe(
-        brand="The comic brand to receive a feed from.",
-        channel="Channel to set up the feed. Leave empty to set up in THIS channel.",
-        _format="Feed format. Use /formats to view options. Summary is default."
-    )
-    @app_commands.rename(_format="format")
-    @app_commands.choices(
-        brand=BrandAutocomplete,
-        _format=format_autocomplete
-    )
-    async def setup(self, interaction: Interaction, brand: str, channel: TextChannel = None,
-                    _format: str = "Summary"):
+    async def setup(self, interaction: Interaction):
         """Sets up a comic pulls feed."""
-        await interaction.response.defer()
-
-        b = self.brands[brand]
-        f = Format(_format)
+        assert interaction.guild_id is not None
         configs = await fetch_configs(self.bot.db, interaction.guild_id)
+        available = sorted(b.id for b in self.brands if b.id not in configs)
 
-        if channel is None:
-            channel = interaction.channel
+        if not available:
+            return await interaction.response.send_message(
+                "You already have feeds for every brand in this server!", ephemeral=True
+            )
 
-        if b.id in configs:
-            return await interaction.followup.send("You have already set up a feed for this brand in this server.")
-
-        new_config = Configuration(
-            interaction.guild_id,
-            channel.id,
-            brand=b, _format=f, day=b.default_day
-        )
-
-        await new_config.upload_to_sql(self.bot.db)
-
-        self.schedule_feed(new_config)
-
-        return await interaction.followup.send(
-            f"Set up the following feed in **this** channel ({channel.mention}). \n" +
-            f"To edit the feed settings, use these commands: \n" +
-            " · ".join(cmd_ping(self.bot.cmds, f"editfeed {i}") for i in ['channel', 'format', 'day', 'ping', 'pin', 'formats', 'schedule']),
-            embed=new_config.to_embed())
+        state = EditorState(configs, available[0], guild_id=interaction.guild_id,
+                            default_channel_id=interaction.channel_id)
+        view = build_editor_view(state, self.bot)
+        await interaction.response.send_message(view=view, ephemeral=True)
+        state.message = await interaction.original_response()
 
 
 async def setup(bot):

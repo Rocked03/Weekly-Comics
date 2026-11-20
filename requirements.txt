@@ -1,4 +1,4 @@
-discord.py
+discord.py>=2.6,<3
 aiohttp
 asyncpg
 Pillow>=13.0.0,<14
