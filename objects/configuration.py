@@ -1,13 +1,12 @@
 import datetime as dt
 from enum import Enum
 
-import discord
 from asyncpg import Record, Pool
 from discord import app_commands, utils
 
 from objects.brand import Brands
 from comic_types.brand import Brand
-from typing import List
+from typing import List, Optional
 
 COMIC_FORMATS = ['Comic', 'Annual', 'Digital Chapter', 'Trade Paperback', 'Hardcover']
 
@@ -51,10 +50,10 @@ class Configuration:
                  brand: Brand, *,
                  _format: Format = Format.SUMMARY,
                  day: int = 1,
-                 ping: int = None,
+                 ping: Optional[int] = None,
                  pin: bool = False,
                  check_keywords: bool = False,
-                 disabled_formats: List[str] = None,
+                 disabled_formats: Optional[List[str]] = None,
                  schedule: Schedule = Schedule.PRINT
                  ):
         self.server_id = server_id
@@ -67,22 +66,6 @@ class Configuration:
         self.check_keywords = check_keywords
         self.disabled_formats = disabled_formats if disabled_formats is not None else []
         self.schedule = schedule
-
-    def to_embed(self):
-        embed = discord.Embed(
-            title=f"{self.brand.name} Configuration",
-            color=self.brand.color
-        )
-        embed.add_field(name="Channel", value=f"<#{self.channel_id}>")
-        embed.add_field(name="Format", value=f"{self.format.value}")
-        embed.add_field(name="Next Scheduled Day", value=f"<t:{int(next_scheduled(self.day).timestamp())}:D>")
-        embed.add_field(name="Ping Role", value=f"<@&{self.ping}>" if self.ping else None)
-        embed.add_field(name="Channel Pin", value="Enabled" if self.pin else "Disabled")
-        enabled_formats = [f for f in COMIC_FORMATS if f not in self.disabled_formats]
-        embed.add_field(name="Formats", value=", ".join(enabled_formats) if enabled_formats else "None")
-        embed.add_field(name="Schedule", value=SCHEDULE_LABELS[self.schedule.value])
-        embed.set_footer(text=f"{self.server_id} · {self.brand.name}")
-        return embed
 
     async def upload_to_sql(self, db: Pool):
         await db.execute(
