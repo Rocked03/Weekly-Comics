@@ -35,7 +35,7 @@ class KeywordsCog(commands.Cog, name="Keywords"):
         e.add_field(name="Creators", value=', '.join(f'`{i}`' for i in kw.creators) if kw.creators else "None")
         e.add_field(name="Feeds with keywords enabled",
                     value=', '.join(f'{c.brand.id} (<#{c.channel_id}>)' for c in
-                                    configs) + f'\nEnable keywords with {cmd_ping(self.bot.cmds, "editfeed check-keywords")}',
+                                    configs) + f'\nEnable the keyword filter in {cmd_ping(self.bot.cmds, "config")}',
                     inline=False)
 
         await interaction.followup.send(embed=e)
