@@ -264,7 +264,10 @@ async def _update_feed(state: EditorState, bot: Any):
     if 'day' in changed or 'schedule' in changed:
         pulls = bot.get_cog('Pulls')
         if pulls is not None:
-            pulls.cancel_feed(config)
+            try:
+                pulls.cancel_feed(config)
+            except KeyError:
+                pass
             pulls.schedule_feed(config)
     state.changes = {}
 
