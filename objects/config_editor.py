@@ -224,10 +224,9 @@ def build_editor_view(state: EditorState, bot: Optional[commands.Bot]) -> Editor
     container.add_item(ActionRow(_channel_select(view, state, bot, vals)))
     container.add_item(_label('Feed format'))
     container.add_item(ActionRow(_format_select(view, state, bot, vals)))
-    container.add_item(_label('Post day'))
-    container.add_item(ActionRow(_day_select(view, state, bot, vals)))
     container.add_item(TextDisplay(
-        f'-# {verb.capitalize()} post: <t:{int(next_scheduled(vals["day"]).timestamp())}:D>'))
+        f'-# Post day · {verb} post <t:{int(next_scheduled(vals["day"]).timestamp())}:D>'))
+    container.add_item(ActionRow(_day_select(view, state, bot, vals)))
     container.add_item(_label('Ping role'))
     container.add_item(ActionRow(_ping_select(view, state, bot, vals)))
     container.add_item(_label('Pin weekly post'))
@@ -317,7 +316,7 @@ def _save_callback(view: EditorView, state: EditorState, bot: Optional[commands.
         except Exception:
             state.status = '⚠ Save failed — your changes are still staged, try again.'
             return await _rerender(view, interaction, state, bot)
-        state.status = f'{verb} {utils.utcnow().strftime("%H:%M UTC")}'
+        state.status = f'{verb} <t:{int(utils.utcnow().timestamp())}:R>'
         await _rerender(view, interaction, state, bot)
 
     return callback
