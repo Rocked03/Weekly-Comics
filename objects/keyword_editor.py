@@ -118,7 +118,8 @@ class AddKeywordsModal(Modal):
 def _list_select(view: KeywordEditorView, state: KeywordEditorState, _type: Types) -> StringSelect:
     staged = state.staged_list(_type)
     s = StringSelect(custom_id='kw:list-keys' if _type is Types.KEYS else 'kw:list-creators',
-                     placeholder=TYPE_LABELS[_type], min_values=1, max_values=min(25, len(staged)),
+                     placeholder=f'Select {"keywords" if _type is Types.KEYS else "creators"} to remove',
+                     min_values=1, max_values=min(25, len(staged)),
                      options=[SelectOption(label=k) for k in staged[:25]])
 
     async def callback(interaction: Interaction):
@@ -131,7 +132,8 @@ def _list_select(view: KeywordEditorView, state: KeywordEditorState, _type: Type
 
 def _add_button(view: KeywordEditorView, state: KeywordEditorState, bot: Optional[commands.Bot],
                 _type: Types) -> Button:
-    b = Button(style=ButtonStyle.primary, label='Add…',
+    b = Button(style=ButtonStyle.primary,
+               label='Add new keywords' if _type is Types.KEYS else 'Add new creators',
                custom_id='kw:add-keys' if _type is Types.KEYS else 'kw:add-creators')
 
     async def callback(interaction: Interaction):
@@ -142,9 +144,8 @@ def _add_button(view: KeywordEditorView, state: KeywordEditorState, bot: Optiona
 
 
 def _remove_button(view: KeywordEditorView, state: KeywordEditorState, _type: Types) -> Button:
-    b = Button(style=ButtonStyle.danger, label='Remove',
-               custom_id='kw:remove-keys' if _type is Types.KEYS else 'kw:remove-creators',
-               disabled=not state.staged_list(_type))
+    b = Button(style=ButtonStyle.danger, label='Remove selected',
+               custom_id='kw:remove-keys' if _type is Types.KEYS else 'kw:remove-creators')
 
     async def callback(interaction: Interaction):
         pending = state.pending[_type]
@@ -169,7 +170,7 @@ def state_bot(view: KeywordEditorView) -> Optional[commands.Bot]:
 def _feeds_select(view: KeywordEditorView, state: KeywordEditorState) -> StringSelect:
     options = [SelectOption(label=state.feed_labels[b], value=b, default=state.checks[b])
                for b in sorted(state.checks)]
-    s = StringSelect(custom_id='kw:feeds', placeholder='Feeds with the keyword filter enabled',
+    s = StringSelect(custom_id='kw:feeds', placeholder='Select feeds to enable the keyword filter on',
                      min_values=0, max_values=len(options), options=options)
 
     async def callback(interaction: Interaction):
@@ -234,14 +235,13 @@ def build_keyword_editor_view(state: KeywordEditorState, bot: Optional[commands.
     def section(_type: Types) -> None:
         staged = state.staged_list(_type)
         container.add_item(_label(f'{TYPE_LABELS[_type]} ({len(staged)})'))
+        container.add_item(_label(', '.join(f'`{k}`' for k in staged) if staged else 'None yet — add some'))
+        container.add_item(ActionRow(_add_button(view, state, bot, _type)))
         if staged:
             container.add_item(ActionRow(_list_select(view, state, _type)))
             if len(staged) > 25:
                 container.add_item(_label(f'showing 25 of {len(staged)}'))
-        else:
-            container.add_item(_label('None yet — add some'))
-        container.add_item(ActionRow(_add_button(view, state, bot, _type),
-                                     _remove_button(view, state, _type)))
+            container.add_item(ActionRow(_remove_button(view, state, _type)))
 
     section(Types.KEYS)
     container.add_item(Separator())
