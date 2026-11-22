@@ -181,17 +181,18 @@ def _label(text: str) -> TextDisplay:
 
 
 async def _save(state: KeywordEditorState, bot: Any):
-    async with bot.db.transaction():
-        for _type, staged, original in ((Types.KEYS, state.keys, state.original_keys),
-                                        (Types.CREATORS, state.creators, state.original_creators)):
-            for keyword in set(staged) - set(original):
-                await add_keyword(bot.db, state.guild_id, keyword, _type)
-            for keyword in set(original) - set(staged):
-                await delete_keyword(bot.db, state.guild_id, keyword, _type)
-        for brand_id, enabled in state.checks.items():
-            if enabled != state.original_checks[brand_id]:
-                await bot.db.execute('UPDATE configuration SET check_key = $1 WHERE server = $2 AND brand = $3',
-                                     enabled, state.guild_id, brand_id)
+    async with bot.db.acquire() as con:
+        async with con.transaction():
+            for _type, staged, original in ((Types.KEYS, state.keys, state.original_keys),
+                                            (Types.CREATORS, state.creators, state.original_creators)):
+                for keyword in set(staged) - set(original):
+                    await add_keyword(con, state.guild_id, keyword, _type)
+                for keyword in set(original) - set(staged):
+                    await delete_keyword(con, state.guild_id, keyword, _type)
+            for brand_id, enabled in state.checks.items():
+                if enabled != state.original_checks[brand_id]:
+                    await con.execute('UPDATE configuration SET check_key = $1 WHERE server = $2 AND brand = $3',
+                                      enabled, state.guild_id, brand_id)
     state.original_keys = list(state.keys)
     state.original_creators = list(state.creators)
     state.original_checks = dict(state.checks)
