@@ -1,7 +1,7 @@
 from typing import Any, Dict, List, Optional
 
 import discord
-from discord import ButtonStyle, Interaction, SelectOption, TextStyle, utils
+from discord import ButtonStyle, Interaction, SelectOption, utils
 from discord.ext import commands
 from discord.ui import ActionRow, Button, Container, LayoutView, Modal, Select as StringSelect, Separator, \
     TextDisplay, TextInput
@@ -91,18 +91,25 @@ class AddKeywordsModal(Modal):
     async def on_submit(self, interaction: Interaction):
         entered = [sanitise(part) for part in str(self.input.value).split(',')]
         entered = [part for part in entered if part]
+        entered = list(dict.fromkeys(entered))
         staged = self.editor_state.staged_list(self.kw_type)
         fresh = [k for k in entered if k not in set(staged)]
         duplicates = len(entered) - len(fresh)
+        too_long = [k for k in fresh if len(k) > 100]
+        fresh = [k for k in fresh if len(k) <= 100]
         if not entered:
             self.editor_state.status = 'Nothing to add'
-        elif not fresh:
+        elif not fresh and not too_long:
             self.editor_state.status = 'Nothing to add · already in the filter'
+        elif not fresh:
+            self.editor_state.status = f'Nothing to add · {len(too_long)} too long (max 100) ignored'
         else:
             self.editor_state.set_staged_list(self.kw_type, staged + fresh)
             summary = f'Added {len(fresh)}'
             if duplicates:
                 summary += f' · {duplicates} duplicate{"s" if duplicates != 1 else ""} ignored'
+            if too_long:
+                summary += f' · {len(too_long)} too long (max 100) ignored'
             self.editor_state.status = summary
         self.view_ref.stop()
         await interaction.response.edit_message(view=build_keyword_editor_view(self.editor_state, self.bot))
@@ -214,6 +221,8 @@ def _save_button(view: KeywordEditorView, state: KeywordEditorState, bot: Option
 
 
 def build_keyword_editor_view(state: KeywordEditorState, bot: Optional[commands.Bot]) -> KeywordEditorView:
+    state.pending[Types.KEYS] = []
+    state.pending[Types.CREATORS] = []
     view = KeywordEditorView(state, bot)
     container = Container()
 
