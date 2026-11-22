@@ -7,6 +7,7 @@ from discord.ui import ActionRow, Button, ChannelSelect, Container, LayoutView, 
     Select as StringSelect, TextDisplay, TextInput
 
 from comic_types.brand import Brand
+from funcs.discord_functions import cmd_ping
 from objects.brand import Brands
 from objects.configuration import COMIC_FORMATS, WEEKDAYS, Format, Schedule, SCHEDULE_LABELS, Configuration, \
     next_scheduled
@@ -190,6 +191,13 @@ def _label(text: str) -> TextDisplay:
     return TextDisplay(f'-# {text}')
 
 
+def keywords_mention(bot: Optional[commands.Bot]) -> str:
+    bot_ref: Any = bot
+    if not bot_ref:
+        return '/keywords'
+    return cmd_ping(bot_ref.cmds, 'keywords')
+
+
 def build_editor_view(state: EditorState, bot: Optional[commands.Bot]) -> EditorView:
     brands = Brands()
     brand = brands[state.brand_id]
@@ -232,7 +240,7 @@ def build_editor_view(state: EditorState, bot: Optional[commands.Bot]) -> Editor
     container.add_item(_label('Pin weekly post'))
     container.add_item(ActionRow(_toggle_select(view, state, bot, 'pin', 'editor:pin', 'Pin weekly post',
                                                 vals['pin'])))
-    container.add_item(_label('Keyword filter'))
+    container.add_item(_label(f'Keyword filter · configure with {keywords_mention(bot)}'))
     container.add_item(ActionRow(_toggle_select(view, state, bot, 'check_keywords', 'editor:keywords',
                                                 'Filter by /keywords', vals['check_keywords'])))
     container.add_item(_label('Comic formats'))
