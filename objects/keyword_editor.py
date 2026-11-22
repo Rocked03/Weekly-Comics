@@ -6,7 +6,7 @@ from discord.ext import commands
 from discord.ui import ActionRow, Button, Container, LayoutView, Modal, Select as StringSelect, Separator, \
     TextDisplay, TextInput
 
-from objects.keywords import Types, sanitise
+from objects.keywords import Types, add_keyword, delete_keyword, sanitise
 
 EDITOR_TIMEOUT = 900
 
@@ -180,11 +180,32 @@ def _label(text: str) -> TextDisplay:
     return TextDisplay(f'-# {text}')
 
 
+async def _save(state: KeywordEditorState, bot: Any):
+    async with bot.db.transaction():
+        for _type, staged, original in ((Types.KEYS, state.keys, state.original_keys),
+                                        (Types.CREATORS, state.creators, state.original_creators)):
+            for keyword in set(staged) - set(original):
+                await add_keyword(bot.db, state.guild_id, keyword, _type)
+            for keyword in set(original) - set(staged):
+                await delete_keyword(bot.db, state.guild_id, keyword, _type)
+        for brand_id, enabled in state.checks.items():
+            if enabled != state.original_checks[brand_id]:
+                await bot.db.execute('UPDATE configuration SET check_key = $1 WHERE server = $2 AND brand = $3',
+                                     enabled, state.guild_id, brand_id)
+    state.original_keys = list(state.keys)
+    state.original_creators = list(state.creators)
+    state.original_checks = dict(state.checks)
+    state.status = f'✓ Saved <t:{int(utils.utcnow().timestamp())}:R>'
+
+
 def _save_button(view: KeywordEditorView, state: KeywordEditorState, bot: Optional[commands.Bot]) -> Button:
     b = Button(style=ButtonStyle.success, label='Save', custom_id='kw:save', disabled=not state.dirty())
 
     async def callback(interaction: Interaction):
-        state.status = 'Save is not wired yet'
+        try:
+            await _save(state, bot)
+        except Exception:
+            state.status = '⚠ Save failed — try again'
         await _rerender(view, interaction, state, bot)
 
     b.callback = callback
