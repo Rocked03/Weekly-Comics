@@ -37,9 +37,8 @@ async def feed_autocomplete(interaction: Interaction, current: str) -> List[app_
         if current.lower() not in config.name.lower():
             continue
         channel = interaction.client.get_channel(config.channel_id)
-        description = f'{config.brand.name} · #{channel.name}' if channel else config.brand.name
-        choices.append(app_commands.Choice(name=config.name, value=str(config.feed_id),
-                                           description=description))
+        suffix = f'{config.brand.name} · #{channel.name}' if channel else config.brand.name
+        choices.append(app_commands.Choice(name=f'{config.name} — {suffix}'[:100], value=str(config.feed_id)))
     return choices[:25]
 
 
