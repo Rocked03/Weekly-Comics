@@ -25,11 +25,11 @@ class KeywordsCog(commands.Cog, name="Keywords"):
 
         checks_map = {}
         feed_labels = {}
-        for brand_id, config in configs.items():
-            checks_map[brand_id] = config.check_keywords
+        for feed_id, config in configs.items():
+            checks_map[feed_id] = config.check_keywords
             channel = interaction.guild.get_channel(config.channel_id) if interaction.guild else None
             suffix = f'#{channel.name}' if channel else 'unknown channel'
-            feed_labels[brand_id] = f'{config.brand.name} — {suffix}'
+            feed_labels[feed_id] = f'{config.name} — {suffix}'
 
         state = KeywordEditorState(guild_id=interaction.guild_id, keys=kw.keys, creators=kw.creators,
                                    checks=checks_map, feed_labels=feed_labels)
