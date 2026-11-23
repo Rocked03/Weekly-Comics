@@ -17,9 +17,9 @@ from config import ADMIN_GUILD_IDS
 from funcs.utils import f_date, week_of_date, is_owner
 from funcs.weeks import week_anchor, target_week
 from funcs.discord_functions import on_app_command_error, cmd_ping, pin, profile_pic
-from funcs.pull_functions import validate_config_accessibility, summary_embed
+from funcs.pull_functions import validate_config_accessibility, summary_embed, clamp
 from funcs.postgresql import fetch_configs
-from objects.brand import Brands, BrandEnum, BrandAutocomplete, Marvel
+from objects.brand import Brands, BrandEnum, BrandAutocomplete
 from objects.comic import Comic, ComicMessage
 from objects.config_editor import EditorState, build_editor_view
 from objects.configuration import Configuration, Format, config_from_record, \
@@ -38,7 +38,8 @@ async def feed_autocomplete(interaction: Interaction, current: str) -> List[app_
             continue
         channel = interaction.client.get_channel(config.channel_id)
         suffix = f'{config.brand.name} · #{channel.name}' if channel else config.brand.name
-        choices.append(app_commands.Choice(name=f'{config.name} — {suffix}'[:100], value=str(config.feed_id)))
+        choices.append(app_commands.Choice(
+            name=f'{clamp(config.name or "", 60)} — {suffix}'[:100], value=str(config.feed_id)))
     return choices[:25]
 
 

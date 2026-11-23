@@ -8,6 +8,7 @@ from discord.ui import ActionRow, Button, ChannelSelect, Container, LayoutView, 
 
 from comic_types.brand import Brand
 from funcs.discord_functions import cmd_ping
+from funcs.pull_functions import clamp
 from objects.brand import Brands
 from objects.configuration import COMIC_FORMATS, WEEKDAYS, Format, Schedule, SCHEDULE_LABELS, Configuration, \
     next_scheduled, default_feed_name, FeedNameInUse
@@ -63,6 +64,8 @@ def display_name(state: EditorState) -> str:
         if state.feed_name is not None:
             return state.feed_name
         return default_feed_name(current_brand(state), [c.name for c in state.configs.values()])
+    if state.feed_id not in state.configs:
+        return '(deleted feed)'
     return effective_values(state)['name']
 
 
@@ -303,7 +306,7 @@ def build_editor_view(state: EditorState, bot: Optional[commands.Bot]) -> Editor
         for fid, c in sorted(state.configs.items()):
             ch = bot.get_channel(c.channel_id) if bot else None
             desc = f'{c.brand.name} · #{ch.name}' if ch else c.brand.name
-            feed_options.append(SelectOption(label=c.name, value=str(fid), description=desc,
+            feed_options.append(SelectOption(label=c.name, value=str(fid), description=clamp(desc, 100),
                                              default=fid == state.feed_id))
         feed_select = StringSelect(custom_id='editor:feed', placeholder='Feed',
                                    options=feed_options, disabled=bool(changed))
@@ -441,13 +444,13 @@ def _delete_callback(view: EditorView, state: EditorState, bot: Optional[command
 class DeleteFeedModal(Modal):
     def __init__(self, state: EditorState, bot: Optional[commands.Bot], config: Configuration,
                  view: EditorView):
-        super().__init__(title=f'Delete {config.name} Feed')
+        super().__init__(title='Delete Feed')
         self.state = state
         self.bot: Any = bot
         self.config = config
         self.view = view
-        self.confirm = TextInput(label=f'Type "{config.name}" to confirm', style=TextStyle.short,
-                                 max_length=100)
+        self.confirm = TextInput(label='Type the feed name to confirm', style=TextStyle.short,
+                                 placeholder=config.name, max_length=100)
         self.add_item(self.confirm)
 
     async def on_submit(self, modal_interaction: Interaction):

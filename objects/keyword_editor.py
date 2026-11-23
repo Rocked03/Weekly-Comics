@@ -7,6 +7,7 @@ from discord.ui import ActionRow, Button, Container, LayoutView, Modal, Select a
     TextDisplay, TextInput
 
 from objects.keywords import Types, add_keyword, delete_keyword, sanitise
+from funcs.pull_functions import clamp
 
 EDITOR_TIMEOUT = 900
 
@@ -17,7 +18,7 @@ class KeywordEditorState:
     """Session state for one ephemeral keyword editor message."""
 
     def __init__(self, *, guild_id: int, keys: List[str], creators: List[str],
-                 checks: Dict[str, bool], feed_labels: Dict[str, str]):
+                 checks: Dict[int, bool], feed_labels: Dict[int, str]):
         self.guild_id = guild_id
         self.original_keys = sorted(set(keys))
         self.original_creators = sorted(set(creators))
@@ -168,7 +169,8 @@ def state_bot(view: KeywordEditorView) -> Optional[commands.Bot]:
 
 
 def _feeds_select(view: KeywordEditorView, state: KeywordEditorState) -> StringSelect:
-    options = [SelectOption(label=state.feed_labels[fid], value=str(fid), default=state.checks[fid])
+    options = [SelectOption(label=clamp(state.feed_labels[fid], 100), value=str(fid),
+                            default=state.checks[fid])
                for fid in sorted(state.checks)]
     s = StringSelect(custom_id='kw:feeds', placeholder='Select feeds to enable the keyword filter on',
                      min_values=0, max_values=len(options), options=options)
