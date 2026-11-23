@@ -28,6 +28,21 @@ from objects.keywords import fetch_keywords
 from services.comic_releases import fetch_comic_week
 
 
+async def feed_autocomplete(interaction: Interaction, current: str) -> List[app_commands.Choice[str]]:
+    """Autocomplete the invoking server's feeds by name."""
+    assert interaction.guild_id is not None
+    configs = await fetch_configs(interaction.client.db, interaction.guild_id)
+    choices = []
+    for config in sorted(configs.values(), key=lambda c: c.feed_id):
+        if current.lower() not in config.name.lower():
+            continue
+        channel = interaction.client.get_channel(config.channel_id)
+        description = f'{config.brand.name} · #{channel.name}' if channel else config.brand.name
+        choices.append(app_commands.Choice(name=config.name, value=str(config.feed_id),
+                                           description=description))
+    return choices[:25]
+
+
 class PullsCog(commands.Cog, name="Pulls"):
     def __init__(self, bot):
         self.bot: commands.Bot = bot
@@ -492,31 +507,31 @@ class PullsCog(commands.Cog, name="Pulls"):
 
     @app_commands.command(name="trigger-feed")
     @checks.has_permissions(manage_guild=True)
-    @app_commands.choices(brand=BrandAutocomplete)
-    async def trigger_feed(self, interaction: Interaction, brand: str):
-        """Triggers your current feed configuration."""
+    @app_commands.autocomplete(feed=feed_autocomplete)
+    @app_commands.describe(feed="The feed to trigger")
+    async def trigger_feed(self, interaction: Interaction, feed: str):
+        """Triggers one of your feeds."""
         await interaction.response.defer()
-        b = self.brands[brand]
+        configs = await fetch_configs(self.bot.db, interaction.guild_id)
 
-        if b.id not in self.bot.comics.keys():
+        if not configs:
+            return await interaction.followup.send(
+                f"You have not set up any feeds yet in this server! "
+                f"Use {cmd_ping(self.bot.cmds, 'setup')} to set one up!")
+
+        try:
+            config = configs[int(feed)]
+        except (KeyError, ValueError):
+            return await interaction.followup.send(
+                "Could not find that feed — pick one from the autocomplete options.")
+
+        if config.brand.id not in self.bot.comics.keys():
             return await interaction.followup.send(
                 "Comics are not yet fetched. Please wait a few moments and try again.")
 
-        con = await self.bot.db.fetch(
-            'SELECT * FROM configuration WHERE server = $1 and brand = $2',
-            interaction.guild_id, b.id
-        )
-
-        if not con:
-            return await interaction.followup.send(
-                f"You have not set up a {b.name} feed yet in this server! Use {cmd_ping(self.bot.cmds, 'setup')} to set one up!")
-
-        configs = [config_from_record(c) for c in con]
-        for c in configs:
-            await self.send_comics(c)
-
+        await self.send_comics(config)
         await interaction.followup.send(
-            f"Feed successfully triggered in {', '.join(f'<#{cc.channel_id}>' for cc in configs)}")
+            f"Feed successfully triggered in <#{config.channel_id}>")
 
     @app_commands.command(name="setup")
     @checks.has_permissions(manage_guild=True)
