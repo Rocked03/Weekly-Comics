@@ -1,4 +1,4 @@
-from typing import Any, Callable, Dict, List, Optional
+from typing import Any, Callable, Dict, List, Optional, Union
 
 import discord
 from discord import ButtonStyle, ChannelType, Interaction, Object, SelectOption, TextStyle, utils
@@ -10,7 +10,7 @@ from comic_types.brand import Brand
 from funcs.discord_functions import cmd_ping
 from objects.brand import Brands
 from objects.configuration import COMIC_FORMATS, WEEKDAYS, Format, Schedule, SCHEDULE_LABELS, Configuration, \
-    next_scheduled
+    next_scheduled, default_feed_name, FeedNameInUse
 
 EDITOR_TIMEOUT = 900
 
@@ -25,14 +25,20 @@ SCHEDULE_HINTS = {
 class EditorState:
     """Session state for one ephemeral editor message."""
 
-    def __init__(self, configs: Dict[str, Configuration], brand_id: str, *,
+    def __init__(self, configs: Dict[int, Configuration], selection: Union[int, str], *,
                  guild_id: int, default_channel_id: Optional[int] = None):
-        self.configs = configs                # brand id -> Configuration for existing feeds
-        self.brand_id = brand_id              # currently selected brand id
+        self.configs = configs                # feed id -> Configuration for existing feeds
         self.guild_id = guild_id
         self.default_channel_id = default_channel_id  # set => create mode
-        self.changes: Dict[str, Any] = {}     # staged attribute values for the selected brand
-        self.status: Optional[str] = None     # transient header flash message
+        if isinstance(selection, str):
+            self.brand_id: str = selection     # create mode: brand of the feed being created
+            self.feed_id: Optional[int] = None  # edit mode: currently selected feed id
+        else:
+            self.brand_id = ''
+            self.feed_id = selection
+        self.feed_name: Optional[str] = None   # create mode: staged custom name (None = auto default)
+        self.changes: Dict[str, Any] = {}      # staged attribute values for the selected feed
+        self.status: Optional[str] = None      # transient header flash message
         self.message: Optional[discord.InteractionMessage] = None
 
     @property
@@ -40,21 +46,43 @@ class EditorState:
         return self.default_channel_id is not None
 
 
+def current_config(state: EditorState) -> Configuration:
+    """The selected existing feed (edit mode only)."""
+    return state.configs[state.feed_id]
+
+
+def current_brand(state: EditorState) -> Brand:
+    if state.creating:
+        return Brands()[state.brand_id]
+    return current_config(state).brand
+
+
+def display_name(state: EditorState) -> str:
+    """Name shown in the editor header for the current selection."""
+    if state.creating:
+        if state.feed_name is not None:
+            return state.feed_name
+        return default_feed_name(current_brand(state), [c.name for c in state.configs.values()])
+    return effective_values(state)['name']
+
+
 def base_values(state: EditorState) -> Dict[str, Any]:
     """Attribute values the selects should currently default to (before staged changes)."""
-    if state.creating or state.brand_id not in state.configs:
+    if state.creating or state.feed_id not in state.configs:
         return {
+            'name': display_name(state),
             'channel_id': state.default_channel_id,
             'format': Format.SUMMARY,
-            'day': Brands()[state.brand_id].default_day,
+            'day': current_brand(state).default_day,
             'ping': None,
             'pin': False,
             'check_keywords': False,
             'disabled_formats': [],
             'schedule': Schedule.PRINT,
         }
-    c = state.configs[state.brand_id]
+    c = state.configs[state.feed_id]
     return {
+        'name': c.name,
         'channel_id': c.channel_id,
         'format': c.format,
         'day': c.day,
@@ -117,15 +145,64 @@ def _stage_callback(view: EditorView, state: EditorState, bot: Optional[commands
 
 def _brand_callback(view: EditorView, state: EditorState, bot: Optional[commands.Bot], select):
     async def callback(interaction: Interaction):
-        if not state.creating and changed_keys(state):
-            # Brand switching is locked while unsaved changes exist; ignore.
-            return await _rerender(view, interaction, state, bot)
         state.brand_id = select.values[0]
+        state.feed_name = None  # re-derive the default name for the new brand
         state.changes = {}
         state.status = None
         await _rerender(view, interaction, state, bot)
 
     return callback
+
+
+def _feed_callback(view: EditorView, state: EditorState, bot: Optional[commands.Bot], select):
+    async def callback(interaction: Interaction):
+        if changed_keys(state):
+            # Feed switching is locked while unsaved changes exist; ignore.
+            return await _rerender(view, interaction, state, bot)
+        state.feed_id = int(select.values[0])
+        state.changes = {}
+        state.status = None
+        await _rerender(view, interaction, state, bot)
+
+    return callback
+
+
+class FeedNameModal(Modal):
+    def __init__(self, state: EditorState, bot: Optional[commands.Bot], view: EditorView):
+        super().__init__(title='Set Feed Name', timeout=EDITOR_TIMEOUT)
+        self.editor_state = state
+        self.bot = bot
+        self.view_ref = view
+        self.name_input = TextInput(label='Feed name (blank = automatic default)',
+                                    style=TextStyle.short, required=False, max_length=100,
+                                    default=display_name(state))
+        self.add_item(self.name_input)
+
+    async def on_submit(self, interaction: Interaction):
+        state = self.editor_state
+        value = self.name_input.value.strip()
+        if state.creating:
+            state.feed_name = value or None
+            state.status = None
+        elif not value:
+            state.status = '⚠ Feed name cannot be empty.'
+        elif value.lower() in {c.name.lower() for fid, c in state.configs.items() if fid != state.feed_id}:
+            state.status = '⚠ That feed name is already in use in this server.'
+        else:
+            state.changes['name'] = value
+            state.status = None
+        self.view_ref.stop()
+        await interaction.response.edit_message(view=build_editor_view(state, self.bot))
+
+
+def _name_button(view: EditorView, state: EditorState, bot: Optional[commands.Bot]) -> Button:
+    b = Button(style=ButtonStyle.primary, label='Set Name', custom_id='editor:name')
+
+    async def callback(interaction: Interaction):
+        await interaction.response.send_modal(FeedNameModal(state, bot, view))
+
+    b.callback = callback
+    return b
 
 
 def _channel_select(view, state, bot, vals) -> ChannelSelect:
@@ -200,7 +277,7 @@ def keywords_mention(bot: Optional[commands.Bot]) -> str:
 
 def build_editor_view(state: EditorState, bot: Optional[commands.Bot]) -> EditorView:
     brands = Brands()
-    brand = brands[state.brand_id]
+    brand = current_brand(state)
     vals = effective_values(state)
     changed = changed_keys(state)
     creating = state.creating
@@ -209,22 +286,35 @@ def build_editor_view(state: EditorState, bot: Optional[commands.Bot]) -> Editor
     container = Container(accent_colour=brand.color)
 
     verb = 'first' if creating else 'next'
-    title = f'## New {brand.name} Feed' if creating else f'## {brand.name} Feed Configuration'
-    summary = f'Posting in <#{vals["channel_id"]}> · {SCHEDULE_LABELS[vals["schedule"].value]}'
+    title = f'## New {brand.name} Feed' if creating else f'## {display_name(state)}'
+    summary = f'{brand.name} · posting in <#{vals["channel_id"]}> · {SCHEDULE_LABELS[vals["schedule"].value]}'
     header = '\n'.join([title, summary] + ([f'-# {state.status}'] if state.status else []))
     container.add_item(TextDisplay(header))
 
     if creating:
-        brand_options = [SelectOption(label=b.name, value=b.id) for b in brands if b.id not in state.configs]
+        brand_options = [SelectOption(label=b.name, value=b.id, default=b.id == state.brand_id)
+                         for b in brands]
+        brand_select = StringSelect(custom_id='editor:brand', placeholder='Brand', options=brand_options)
+        brand_select.callback = _brand_callback(view, state, bot, brand_select)
+        container.add_item(_label('Brand'))
+        container.add_item(ActionRow(brand_select))
     else:
-        brand_options = [SelectOption(label=b.name, value=b.id) for b in brands if b.id in state.configs]
-    for o in brand_options:
-        o.default = o.value == state.brand_id
-    brand_select = StringSelect(custom_id='editor:brand', placeholder='Feed', options=brand_options,
-                                disabled=(not creating and bool(changed)))
-    brand_select.callback = _brand_callback(view, state, bot, brand_select)
-    container.add_item(_label('Feed'))
-    container.add_item(ActionRow(brand_select))
+        feed_options = []
+        for fid, c in sorted(state.configs.items()):
+            ch = bot.get_channel(c.channel_id) if bot else None
+            desc = f'{c.brand.name} · #{ch.name}' if ch else c.brand.name
+            feed_options.append(SelectOption(label=c.name, value=str(fid), description=desc,
+                                             default=fid == state.feed_id))
+        feed_select = StringSelect(custom_id='editor:feed', placeholder='Feed',
+                                   options=feed_options, disabled=bool(changed))
+        feed_select.callback = _feed_callback(view, state, bot, feed_select)
+        container.add_item(_label('Feed'))
+        container.add_item(ActionRow(feed_select))
+
+    container.add_item(Separator())
+
+    container.add_item(_label(f'Feed name · {display_name(state)}'))
+    container.add_item(ActionRow(_name_button(view, state, bot)))
 
     container.add_item(Separator())
 
@@ -268,7 +358,7 @@ def build_editor_view(state: EditorState, bot: Optional[commands.Bot]) -> Editor
 
 async def _update_feed(state: EditorState, bot: Any):
     """Apply staged changes to the selected existing feed (one UPDATE, reschedule if needed)."""
-    config = state.configs[state.brand_id]
+    config = state.configs[state.feed_id]
     changed = {k: state.changes[k] for k in changed_keys(state)}
     if not changed:
         return
@@ -296,14 +386,21 @@ async def _create_feed(state: EditorState, bot: Any):
     """Create the configured feed and flip the session into edit mode."""
     brand = Brands()[state.brand_id]
     vals = effective_values(state)
+    existing_names = [c.name for c in state.configs.values()]
+    name = state.feed_name if state.feed_name is not None else default_feed_name(brand, existing_names)
+    if name.lower() in {n.lower() for n in existing_names}:
+        raise FeedNameInUse(name)
     config = Configuration(
-        state.guild_id, vals['channel_id'], brand=brand,
+        state.guild_id, vals['channel_id'], brand=brand, name=name,
         _format=vals['format'], day=vals['day'], ping=vals['ping'], pin=vals['pin'],
         check_keywords=vals['check_keywords'], disabled_formats=vals['disabled_formats'],
         schedule=vals['schedule'])
     await config.upload_to_sql(bot.db)
     state.default_channel_id = None
-    state.configs[brand.id] = config
+    state.brand_id = ''
+    state.feed_name = None
+    state.feed_id = config.feed_id
+    state.configs[config.feed_id] = config
     state.changes = {}
     pulls = bot.get_cog('Pulls')
     if pulls is not None:
@@ -321,6 +418,9 @@ def _save_callback(view: EditorView, state: EditorState, bot: Optional[commands.
                 await _create_feed(state, bot)
             else:
                 await _update_feed(state, bot)
+        except FeedNameInUse:
+            state.status = '⚠ That feed name is already in use in this server.'
+            return await _rerender(view, interaction, state, bot)
         except Exception:
             state.status = '⚠ Save failed — your changes are still staged, try again.'
             return await _rerender(view, interaction, state, bot)
@@ -332,45 +432,47 @@ def _save_callback(view: EditorView, state: EditorState, bot: Optional[commands.
 
 def _delete_callback(view: EditorView, state: EditorState, bot: Optional[commands.Bot]):
     async def callback(interaction: Interaction):
-        await interaction.response.send_modal(DeleteFeedModal(state, bot, Brands()[state.brand_id], view))
+        await interaction.response.send_modal(
+            DeleteFeedModal(state, bot, current_config(state), view))
 
     return callback
 
 
 class DeleteFeedModal(Modal):
-    def __init__(self, state: EditorState, bot: Optional[commands.Bot], brand: Brand, view: EditorView):
-        super().__init__(title=f'Delete {brand.name} Feed')
+    def __init__(self, state: EditorState, bot: Optional[commands.Bot], config: Configuration,
+                 view: EditorView):
+        super().__init__(title=f'Delete {config.name} Feed')
         self.state = state
         self.bot: Any = bot
-        self.brand = brand
+        self.config = config
         self.view = view
-        self.confirm = TextInput(label=f'Type "{brand.name}" to confirm', style=TextStyle.short, max_length=32)
+        self.confirm = TextInput(label=f'Type "{config.name}" to confirm', style=TextStyle.short,
+                                 max_length=100)
         self.add_item(self.confirm)
 
     async def on_submit(self, modal_interaction: Interaction):
-        if self.confirm.value.strip().lower() != self.brand.name.lower():
+        if self.confirm.value.strip().lower() != self.config.name.lower():
             await modal_interaction.response.send_message(
                 'Confirmation text did not match — the feed was not deleted.', ephemeral=True)
             return
-        config = self.state.configs.get(self.brand.id)
+        config = self.config
         try:
-            if config is not None:
-                await config.delete_from_sql(self.bot.db)
+            await config.delete_from_sql(self.bot.db)
         except Exception:
             await modal_interaction.response.send_message(
                 'Delete failed — try again.', ephemeral=True)
             return
         pulls = self.bot.get_cog('Pulls')
-        if pulls is not None and config is not None:
+        if pulls is not None:
             try:
                 pulls.cancel_feed(config)
             except KeyError:
                 pass
-        self.state.configs.pop(self.brand.id, None)
+        self.state.configs.pop(config.feed_id, None)
         self.state.changes = {}
         self.state.status = None
         if self.state.configs:
-            self.state.brand_id = sorted(self.state.configs)[0]
+            self.state.feed_id = min(self.state.configs)
             self.view.stop()
             await modal_interaction.response.edit_message(view=build_editor_view(self.state, self.bot))
         else:

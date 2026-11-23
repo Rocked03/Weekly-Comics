@@ -524,15 +524,14 @@ class PullsCog(commands.Cog, name="Pulls"):
         """Sets up a comic pulls feed."""
         assert interaction.guild_id is not None
         configs = await fetch_configs(self.bot.db, interaction.guild_id)
-        available = sorted(b.id for b in self.brands if b.id not in configs)
 
-        if not available:
+        if len(configs) >= 10:
             return await interaction.response.send_message(
-                "You already have feeds for every brand in this server!", ephemeral=True
+                "You've reached the maximum of 10 feeds in this server!", ephemeral=True
             )
 
-        state = EditorState(configs, available[0], guild_id=interaction.guild_id,
-                            default_channel_id=interaction.channel_id)
+        state = EditorState(configs, sorted(b.id for b in self.brands)[0],
+                            guild_id=interaction.guild_id, default_channel_id=interaction.channel_id)
         view = build_editor_view(state, self.bot)
         await interaction.response.send_message(view=view, ephemeral=True)
         state.message = await interaction.original_response()
