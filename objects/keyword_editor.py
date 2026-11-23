@@ -7,6 +7,7 @@ from discord.ui import ActionRow, Button, Container, LayoutView, Modal, Select a
     TextDisplay, TextInput
 
 from objects.keywords import Types, add_keyword, delete_keyword, sanitise
+from funcs.pull_functions import clamp
 
 EDITOR_TIMEOUT = 900
 
@@ -17,7 +18,7 @@ class KeywordEditorState:
     """Session state for one ephemeral keyword editor message."""
 
     def __init__(self, *, guild_id: int, keys: List[str], creators: List[str],
-                 checks: Dict[str, bool], feed_labels: Dict[str, str]):
+                 checks: Dict[int, bool], feed_labels: Dict[int, str]):
         self.guild_id = guild_id
         self.original_keys = sorted(set(keys))
         self.original_creators = sorted(set(creators))
@@ -25,7 +26,7 @@ class KeywordEditorState:
         self.creators = list(self.original_creators)
         self.original_checks = dict(checks)
         self.checks = dict(checks)
-        self.feed_labels = feed_labels          # brand id -> 'Marvel — #channel' / 'Marvel — unknown channel'
+        self.feed_labels = feed_labels          # feed id -> 'Marvel — #channel' / 'Marvel — unknown channel'
         self.pending: Dict[Types, List[str]] = {Types.KEYS: [], Types.CREATORS: []}
         self.status: Optional[str] = None
         self.message: Optional[discord.InteractionMessage] = None
@@ -168,15 +169,16 @@ def state_bot(view: KeywordEditorView) -> Optional[commands.Bot]:
 
 
 def _feeds_select(view: KeywordEditorView, state: KeywordEditorState) -> StringSelect:
-    options = [SelectOption(label=state.feed_labels[b], value=b, default=state.checks[b])
-               for b in sorted(state.checks)]
+    options = [SelectOption(label=clamp(state.feed_labels[fid], 100), value=str(fid),
+                            default=state.checks[fid])
+               for fid in sorted(state.checks)]
     s = StringSelect(custom_id='kw:feeds', placeholder='Select feeds to enable the keyword filter on',
                      min_values=0, max_values=len(options), options=options)
 
     async def callback(interaction: Interaction):
-        selected = set(s.values)
-        for brand_id in state.checks:
-            state.checks[brand_id] = brand_id in selected
+        selected = {int(v) for v in s.values}
+        for feed_id in state.checks:
+            state.checks[feed_id] = feed_id in selected
         state.status = None
         await _rerender(view, interaction, state, state_bot(view))
 
@@ -197,10 +199,11 @@ async def _save(state: KeywordEditorState, bot: Any):
                     await add_keyword(con, state.guild_id, keyword, _type)
                 for keyword in set(original) - set(staged):
                     await delete_keyword(con, state.guild_id, keyword, _type)
-            for brand_id, enabled in state.checks.items():
-                if enabled != state.original_checks[brand_id]:
-                    await con.execute('UPDATE configuration SET check_key = $1 WHERE server = $2 AND brand = $3',
-                                      enabled, state.guild_id, brand_id)
+            for feed_id, enabled in state.checks.items():
+                if enabled != state.original_checks[feed_id]:
+                    await con.execute(
+                        'UPDATE configuration SET check_key = $1 WHERE server = $2 AND feed_id = $3',
+                        enabled, state.guild_id, feed_id)
     state.original_keys = list(state.keys)
     state.original_creators = list(state.creators)
     state.original_checks = dict(state.checks)
