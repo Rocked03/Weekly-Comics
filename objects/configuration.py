@@ -1,6 +1,7 @@
 import datetime as dt
 from enum import Enum
 
+import asyncpg
 from asyncpg import Record, Pool
 from discord import app_commands, utils
 
@@ -43,11 +44,28 @@ schedule_autocomplete = [
 SCHEDULE_LABELS = {c.value: c.name for c in schedule_autocomplete}
 
 
+class FeedNameInUse(Exception):
+    """Raised when creating or renaming a feed to a name already used in the same server."""
+
+
+def default_feed_name(brand: Brand, existing_names: List[str]) -> str:
+    """Brand name if unused, else 'Brand (n)' with the smallest free n >= 2."""
+    taken = {name.lower() for name in existing_names}
+    if brand.name.lower() not in taken:
+        return brand.name
+    n = 2
+    while f'{brand.name} ({n})'.lower() in taken:
+        n += 1
+    return f'{brand.name} ({n})'
+
+
 class Configuration:
     def __init__(self,
                  server_id: int,
                  channel_id: int,
                  brand: Brand, *,
+                 feed_id: Optional[int] = None,
+                 name: Optional[str] = None,
                  _format: Format = Format.SUMMARY,
                  day: int = 1,
                  ping: Optional[int] = None,
@@ -58,6 +76,8 @@ class Configuration:
                  ):
         self.server_id = server_id
         self.channel_id = channel_id
+        self.feed_id = feed_id
+        self.name = name
         self.format = _format
         self.brand = brand
         self.day = day
@@ -68,29 +88,43 @@ class Configuration:
         self.schedule = schedule
 
     async def upload_to_sql(self, db: Pool):
-        await db.execute(
-            "INSERT INTO configuration " +
-            "(server, brand, format, channel, day, ping, pin, check_key, disabled_formats, schedule) " +
-            "VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)",
-            self.server_id, self.brand.id, self.format.name, self.channel_id, self.day, self.ping, self.pin,
-            self.check_keywords, self.disabled_formats, self.schedule.value
-        )
+        for attempt in range(2):
+            async with db.acquire() as con:
+                async with con.transaction():
+                    feed_id = await con.fetchval(
+                        'SELECT COALESCE(MAX(feed_id), 0) + 1 FROM configuration WHERE server = $1',
+                        self.server_id)
+                    try:
+                        await con.execute(
+                            "INSERT INTO configuration "
+                            "(server, feed_id, brand, name, format, channel, day, ping, pin, check_key, "
+                            "disabled_formats, schedule) "
+                            "VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)",
+                            self.server_id, feed_id, self.brand.id, self.name, self.format.name,
+                            self.channel_id, self.day, self.ping, self.pin, self.check_keywords,
+                            self.disabled_formats, self.schedule.value
+                        )
+                    except asyncpg.UniqueViolationError as e:
+                        if attempt == 0 and e.constraint_name == 'configuration_pkey':
+                            continue  # rare feed_id race; retry with a fresh max
+                        raise  # name collisions propagate to the editor
+                    self.feed_id = feed_id
+                    return
 
     async def edit_sql(self, db: Pool):
         await db.execute(
-            "UPDATE configuration " +
-            "SET format = $3, channel = $4, day = $5, ping = $6, pin = $7, check_key = $8, " +
-            "disabled_formats = $9, schedule = $10 " +
-            "WHERE (server = $1 AND brand = $2)",
-            self.server_id, self.brand.id,
-            self.format.name, self.channel_id, self.day, self.ping, self.pin, self.check_keywords,
-            self.disabled_formats, self.schedule.value
+            "UPDATE configuration "
+            "SET name = $3, format = $4, channel = $5, day = $6, ping = $7, pin = $8, check_key = $9, "
+            "disabled_formats = $10, schedule = $11 "
+            "WHERE (server = $1 AND feed_id = $2)",
+            self.server_id, self.feed_id, self.name, self.format.name, self.channel_id, self.day,
+            self.ping, self.pin, self.check_keywords, self.disabled_formats, self.schedule.value
         )
 
     async def delete_from_sql(self, db: Pool):
         await db.execute(
-            "DELETE FROM configuration WHERE server = $1 AND brand = $2",
-            self.server_id, self.brand.id
+            "DELETE FROM configuration WHERE server = $1 AND feed_id = $2",
+            self.server_id, self.feed_id
         )
 
 
@@ -99,6 +133,8 @@ def config_from_record(record: Record):
         record['server'],
         record['channel'],
         brand=Brands()[record['brand']],
+        feed_id=record['feed_id'],
+        name=record['name'],
         _format=Format[record['format']],
         day=record['day'],
         ping=record['ping'],
