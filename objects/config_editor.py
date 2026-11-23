@@ -176,9 +176,10 @@ class FeedNameModal(Modal):
         self.editor_state = state
         self.bot = bot
         self.view_ref = view
-        self.name_input = TextInput(label='Feed name (blank = automatic default)',
-                                    style=TextStyle.short, required=False, max_length=100,
-                                    default=display_name(state))
+        self.name_input = TextInput(
+            label='Feed name' if not state.creating else 'Feed name (blank = automatic default)',
+            style=TextStyle.short, required=not state.creating, max_length=100,
+            default=display_name(state))
         self.add_item(self.name_input)
 
     async def on_submit(self, interaction: Interaction):
