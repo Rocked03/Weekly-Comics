@@ -41,9 +41,9 @@ class PullsCog(commands.Cog, name="Pulls"):
         self.access_lock = asyncio.Lock()
         self.locks: Dict[int, asyncio.Lock] = {}
 
-        self.schedule_offsets: Dict[Tuple[int, str], float] = {}
+        self.schedule_offsets: Dict[Tuple[int, int], float] = {}
 
-        self.feed_schedules: Dict[(int, str), Task] = {}
+        self.feed_schedules: Dict[Tuple[int, int], Task] = {}
         self.bot.loop.create_task(self.on_startup_scheduler())
 
     def current_week_comics(self, brand_id: str) -> List[Comic]:
@@ -148,7 +148,7 @@ class PullsCog(commands.Cog, name="Pulls"):
         if inaccessible_configs:
             print("[Pull Feed Scheduler] Inaccessible configurations:")
             for config, reason in inaccessible_configs:
-                print(f"  - Server {config.server_id}, Brand {config.brand.name}: {reason}")
+                print(f"  - Server {config.server_id}, Feed {config.name}: {reason}")
 
             guild_not_found = [str(config.server_id) for config, reason in inaccessible_configs if
                                reason == "Guild not found"]
@@ -161,7 +161,7 @@ class PullsCog(commands.Cog, name="Pulls"):
             by_day.setdefault(config.day, []).append(config)
 
         # Calculate offsets for each day
-        self.schedule_offsets: Dict[Tuple[int, str], float] = {}
+        self.schedule_offsets: Dict[Tuple[int, int], float] = {}
         for day_configs in by_day.values():
             offsets = await self.calculate_schedule_offsets(day_configs)
             self.schedule_offsets.update(offsets)
@@ -173,7 +173,7 @@ class PullsCog(commands.Cog, name="Pulls"):
         print(f"[Pull Feed Scheduler] Scheduled {len(valid_configs)} feeds, "
               f"skipped {len(inaccessible_configs)} inaccessible")
 
-    async def calculate_schedule_offsets(self, configs: List[Configuration]) -> Dict[Tuple[int, str], float]:
+    async def calculate_schedule_offsets(self, configs: List[Configuration]) -> Dict[Tuple[int, int], float]:
         """Calculate time offsets for configs to spread out execution."""
         # Configuration for timing (easily adjustable)
         COMPACT_INTERVAL = 0.5  # seconds between compact feeds
@@ -200,7 +200,7 @@ class PullsCog(commands.Cog, name="Pulls"):
         current_offset = 0.0
 
         for config in sorted_configs:
-            offsets[(config.server_id, config.brand.id)] = current_offset
+            offsets[(config.server_id, config.feed_id)] = current_offset
 
             if config.format == Format.FULL:
                 current_offset += FULL_INTERVAL
@@ -213,7 +213,7 @@ class PullsCog(commands.Cog, name="Pulls"):
 
     def schedule_feed(self, config: Configuration):
         try:
-            self.feed_schedules[(config.server_id, config.brand.id)] = self.bot.loop.create_task(self.scheduler(config))
+            self.feed_schedules[(config.server_id, config.feed_id)] = self.bot.loop.create_task(self.scheduler(config))
         except AttributeError:
             pass
 
@@ -222,28 +222,28 @@ class PullsCog(commands.Cog, name="Pulls"):
         base_time = next_scheduled(config.day)
 
         # Add the offset for this specific config (0.0 if not found)
-        offset = self.schedule_offsets.get((config.server_id, config.brand.id), 0.0)
+        offset = self.schedule_offsets.get((config.server_id, config.feed_id), 0.0)
         scheduled_time = base_time + dt.timedelta(seconds=offset)
 
         sleep_duration = scheduled_time - utils.utcnow()
 
         if sleep_duration.total_seconds() > 0:
-            print(f"[Pull Feed Scheduler] ({config.server_id}, {config.brand.name}) "
+            print(f"[Pull Feed Scheduler] ({config.server_id}, {config.name}) "
                   f"Timer: {sleep_duration} (offset: {offset:.1f}s)")
             await asyncio.sleep(sleep_duration.total_seconds())
 
-        print(f"[Pull Feed Scheduler] ({config.server_id}, {config.brand.name}) Executing. {utils.utcnow()}")
+        print(f"[Pull Feed Scheduler] ({config.server_id}, {config.name}) Executing. {utils.utcnow()}")
         try:
             await self.send_comics(config)
         except KeyError:
-            print(f"[Pull Feed Scheduler] ({config.server_id}, {config.brand.name}) KeyError, "
+            print(f"[Pull Feed Scheduler] ({config.server_id}, {config.name}) KeyError, "
                   f"probably comics not fetched yet.")
 
         await self.scheduler(config)
 
     def cancel_feed(self, config: Configuration):
-        self.feed_schedules[(config.server_id, config.brand.id)].cancel()
-        print(f"[Pull Feed Scheduler] ({config.server_id}, {config.brand.name}) Cancelled.")
+        self.feed_schedules[(config.server_id, config.feed_id)].cancel()
+        print(f"[Pull Feed Scheduler] ({config.server_id}, {config.name}) Cancelled.")
 
     async def fetch_comics(self):
         print(f"~~ Fetching comics ~~   {utils.utcnow()}")
@@ -427,8 +427,8 @@ class PullsCog(commands.Cog, name="Pulls"):
             return await interaction.followup.send("Comics are not yet fetched.")
 
         con = await self.bot.db.fetch(
-            'SELECT * FROM configuration WHERE server = $1 AND brand = $2',
-            interaction.guild_id, Marvel.id
+            'SELECT * FROM configuration WHERE server = $1',
+            interaction.guild_id
         )
 
         for c in con:
@@ -486,19 +486,6 @@ class PullsCog(commands.Cog, name="Pulls"):
                 return await interaction.followup.send("Could not fetch that week's comics. Try again shortly.")
 
         comics = self.bot.comics[b.id][week]
-
-        con = await self.bot.db.fetch(
-            'SELECT * FROM configuration WHERE server = $1 and brand = $2',
-            interaction.guild_id, b.id
-        )
-
-        if con:
-            config = config_from_record(con[0])
-            if config.disabled_formats:
-                comics = {k: v for k, v in comics.items() if v.format not in config.disabled_formats}
-            if config.check_keywords:
-                kw = await fetch_keywords(self.bot.db, config.server_id)
-                comics = {k: v for k, v in comics.items() if kw.check_comic(v)}
 
         embeds = await summary_embed(self.bot.order[b.id][week], comics, b)
         await interaction.followup.send(embeds=embeds)
