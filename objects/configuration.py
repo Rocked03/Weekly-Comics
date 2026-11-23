@@ -105,21 +105,28 @@ class Configuration:
                             self.disabled_formats, self.schedule.value
                         )
                     except asyncpg.UniqueViolationError as e:
-                        if attempt == 0 and e.constraint_name == 'configuration_pkey':
+                        if attempt == 0 and e.constraint_name == 'configuration_pkey':  # pyright: ignore[reportAttributeAccessIssue]
                             continue  # rare feed_id race; retry with a fresh max
-                        raise  # name collisions propagate to the editor
+                        if e.constraint_name == 'configuration_server_name_key':  # pyright: ignore[reportAttributeAccessIssue]
+                            raise FeedNameInUse(self.name) from e
+                        raise  # other violations propagate to the editor
                     self.feed_id = feed_id
                     return
 
     async def edit_sql(self, db: Pool):
-        await db.execute(
-            "UPDATE configuration "
-            "SET name = $3, format = $4, channel = $5, day = $6, ping = $7, pin = $8, check_key = $9, "
-            "disabled_formats = $10, schedule = $11 "
-            "WHERE (server = $1 AND feed_id = $2)",
-            self.server_id, self.feed_id, self.name, self.format.name, self.channel_id, self.day,
-            self.ping, self.pin, self.check_keywords, self.disabled_formats, self.schedule.value
-        )
+        try:
+            await db.execute(
+                "UPDATE configuration "
+                "SET name = $3, format = $4, channel = $5, day = $6, ping = $7, pin = $8, check_key = $9, "
+                "disabled_formats = $10, schedule = $11 "
+                "WHERE (server = $1 AND feed_id = $2)",
+                self.server_id, self.feed_id, self.name, self.format.name, self.channel_id, self.day,
+                self.ping, self.pin, self.check_keywords, self.disabled_formats, self.schedule.value
+            )
+        except asyncpg.UniqueViolationError as e:
+            if e.constraint_name == 'configuration_server_name_key':  # pyright: ignore[reportAttributeAccessIssue]
+                raise FeedNameInUse(self.name) from e
+            raise
 
     async def delete_from_sql(self, db: Pool):
         await db.execute(

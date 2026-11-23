@@ -18,7 +18,7 @@ async def fetch_raw_configs(db: Pool, server: int):
 
 async def fetch_configs(db: Pool, server: int) -> Dict[int, Configuration]:
     configs: List[Configuration] = [config_from_record(i) for i in await fetch_raw_configs(db, server)]
-    return {c.feed_id: c for c in configs}
+    return {c.feed_id: c for c in configs if c.feed_id is not None}
 
 
 class PostgreSQLCog(commands.Cog, name="PostgreSQL"):
