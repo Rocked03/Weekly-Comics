@@ -1,7 +1,6 @@
 -- Expand 'Comic' into 'Print Comic' + 'Digital Comic'; map 'Digital Chapter'
 -- to 'Digital Comic' (preserving those guilds' suppression intent, consistent
--- with the locg-api week-cache migration). ARRAY(SELECT ...) yields {} (not
--- NULL) when nothing remains.
+-- with the locg-api week-cache migration).
 UPDATE configuration
 SET disabled_formats = ARRAY(
   SELECT DISTINCT f FROM (
