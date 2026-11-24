@@ -1,12 +1,14 @@
--- Expand 'Comic' into 'Print Comic' + 'Digital Comic'; drop 'Digital Chapter'.
--- ARRAY(SELECT ...) yields {} (not NULL), so a guild that
--- had disabled only 'Digital Chapter' correctly ends with nothing disabled.
+-- Expand 'Comic' into 'Print Comic' + 'Digital Comic'; map 'Digital Chapter'
+-- to 'Digital Comic' (preserving those guilds' suppression intent, consistent
+-- with the locg-api week-cache migration). ARRAY(SELECT ...) yields {} (not
+-- NULL) when nothing remains.
 UPDATE configuration
 SET disabled_formats = ARRAY(
   SELECT DISTINCT f FROM (
     SELECT unnest(disabled_formats) AS f
     UNION ALL SELECT 'Print Comic' WHERE 'Comic' = ANY(disabled_formats)
     UNION ALL SELECT 'Digital Comic' WHERE 'Comic' = ANY(disabled_formats)
+    UNION ALL SELECT 'Digital Comic' WHERE 'Digital Chapter' = ANY(disabled_formats)
   ) s
   WHERE f NOT IN ('Comic', 'Digital Chapter')
 )
