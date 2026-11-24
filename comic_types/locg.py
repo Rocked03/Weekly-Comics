@@ -2,6 +2,8 @@ from dataclasses import dataclass
 from typing import Optional, List
 from datetime import date
 
+ISSUE_FORMATS = frozenset({'Print Comic', 'Digital Comic'})
+
 
 @dataclass
 class ComicData:

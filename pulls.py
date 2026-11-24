@@ -301,7 +301,7 @@ class PullsCog(commands.Cog, name="Pulls"):
         self.sort_order(comic_dict, brand, week)
 
     def sort_order(self, comic_dict: Dict[int, ComicDetails], brand: Brand, week: dt.date):
-        format_order = ["Comic", "Trade Paperback", "Hardcover"]
+        format_order = ["Print Comic", "Digital Comic", "Trade Paperback", "Hardcover"]
 
         self.bot.order.setdefault(brand.id, {})[week] = sorted(
             comic_dict.keys(),

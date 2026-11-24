@@ -9,7 +9,7 @@ from objects.brand import Brands
 from comic_types.brand import Brand
 from typing import List, Optional
 
-COMIC_FORMATS = ['Comic', 'Annual', 'Digital Chapter', 'Trade Paperback', 'Hardcover']
+COMIC_FORMATS = ['Print Comic', 'Digital Comic', 'Annual', 'Trade Paperback', 'Hardcover']
 
 WEEKDAYS = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday']
 

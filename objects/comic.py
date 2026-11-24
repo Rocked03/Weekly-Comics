@@ -2,7 +2,7 @@ from discord import Message, Embed
 
 from objects.brand import Brands
 from comic_types.brand import Brand
-from comic_types.locg import ComicDetails
+from comic_types.locg import ISSUE_FORMATS, ComicDetails
 
 
 class Comic(ComicDetails):
@@ -57,7 +57,7 @@ class Comic(ComicDetails):
             else:
                 for name in creators[k]:
                     overflow.append(f"{name} ({k})")
-        if overflow and self.format == "Comic":
+        if overflow and self.format in ISSUE_FORMATS:
             text.append(f"-# ▾**__More__**\n{' · '.join(overflow)}")
 
         result = []
