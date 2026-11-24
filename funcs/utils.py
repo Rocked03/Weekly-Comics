@@ -4,7 +4,7 @@ from typing import Type, TypeVar, List
 
 from discord import Interaction
 
-from comic_types.locg import ComicDetails
+from comic_types.locg import ISSUE_FORMATS, ComicDetails
 from config import ADMIN_USER_IDS
 from objects.brand import Brands
 
@@ -52,7 +52,7 @@ def week_of_date(comics: List[ComicDetails]) -> dt.date:
     comics = list(comics)
     if not comics:
         return dt.date.today()
-    issues = [c.releaseDate for c in comics if c.format == "Comic"]
+    issues = [c.releaseDate for c in comics if c.format in ISSUE_FORMATS]
     if issues:
         return min(issues)
     return min(c.releaseDate for c in comics)

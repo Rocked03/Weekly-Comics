@@ -4,6 +4,7 @@ from discord import Embed, Message
 from discord.ext.commands import Bot
 
 from comic_types.brand import Brand
+from comic_types.locg import ISSUE_FORMATS
 from funcs.utils import week_of_date, f_date
 from objects.comic import ComicMessage, Comic
 from objects.configuration import Configuration
@@ -70,11 +71,11 @@ async def summary_embed(
         info_text = " · ".join(info) if info else "···"
 
         if (n == 24 or
-                (comic.format != "Comic" and currently_issues) or
+                (comic.format not in ISSUE_FORMATS and currently_issues) or
                 len(embed) + len(comic.title) + len(info_text) > 6000):
             embeds.append(embed.copy())
             embed = empty_embed.copy()
-            currently_issues = comic.format == "Comic"
+            currently_issues = comic.format in ISSUE_FORMATS
             n = 0
 
         title = clamp(comic.title, 256)
